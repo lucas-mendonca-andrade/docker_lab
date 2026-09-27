@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Comando único do docker_lab, instalado em /usr/local/bin/docker-lab pelo setup.sh
+# (symlink pra este arquivo) — assim ninguém precisa digitar o caminho da instalação.
+set -euo pipefail
+
+# readlink -f: resolve o symlink de /usr/local/bin até a pasta real do docker_lab.
+HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+
+uso() {
+    cat >&2 <<USO
+Uso:
+  docker-lab run [job.env]   roda o job (padrão: job.env da pasta atual)
+  docker-lab status          mostra recursos em uso e livres
+  docker-lab stop            para um job ativo (menu)
+  docker-lab history         mostra o histórico de execuções
+USO
+}
+
+case "${1:-}" in
+    run)     exec "$HERE/run.sh" "${2:-job.env}" ;;
+    status)  exec "$HERE/status.sh" ;;
+    stop)    exec "$HERE/stop.sh" ;;
+    history) exec "$HERE/history.sh" ;;
+    *)       uso; exit 1 ;;
+esac

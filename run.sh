@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Uso: ./run.sh <caminho/pro/job.env>
+# Uso: docker-lab run [job.env]   (ou direto: ./run.sh <caminho/pro/job.env>)
 #
 # Convenção: job.env SEMPRE fica na raiz do projeto que você quer executar (não dentro
 # do docker_lab, não numa pasta qualquer) — REPO_ROOT é auto-detectado como a pasta
@@ -15,7 +15,7 @@
 # 4. Sobe o container em SEGUNDO PLANO (nohup, sobrevive a fechar o terminal) e volta o
 #    prompt pra voce imediatamente — o log vai pra docker_lab/logs/<job>.log.
 # 5. A reserva e liberada sozinha quando o container termina (sucesso, erro, ou
-#    ./stop.sh) — nao precisa fazer nada.
+#    docker-lab stop) — nao precisa fazer nada.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -119,7 +119,7 @@ echo "== Reservando recurso para '$JOB_NAME' (cores=$CORES mem=${MEMORY_GB}GB $G
 if ! ALLOC_CORES=$(flock "$LOCK_FILE" "$HOST_PYTHON" "$HERE/lib/reserve.py" --state "$STATE_FILE" \
         acquire --name "$JOB_NAME" --cores "$CORES" --mem "$MEMORY_GB" --gpu "$GPU" \
         --gpu-mem "$GPU_MEMORY_GB"); then
-    echo "== Não foi possível reservar recurso — veja a mensagem acima. Rode ./status.sh para ver o que está em uso. ==" >&2
+    echo "== Não foi possível reservar recurso — veja a mensagem acima. Rode docker-lab status para ver o que está em uso. ==" >&2
     exit 1
 fi
 echo "== Reservado: cores do host = $ALLOC_CORES =="
@@ -157,7 +157,7 @@ fi
 # O container em si roda num script gerado aqui (nao direto neste processo), pra poder
 # ser disparado com nohup e sobreviver ao ./run.sh terminar/ao terminal fechar. Esse
 # script e quem libera a reserva (trap EXIT), quando o container terminar por qualquer
-# motivo — sucesso, erro, ou 'docker stop' via ./stop.sh.
+# motivo — sucesso, erro, ou 'docker stop' via docker-lab stop.
 #
 # Monta o repo no MESMO caminho absoluto que ele tem no host (nao em /workspace): varios
 # venvs de framework deste projeto (ex. frameworks/AutoGluon/venv) tem link simbolico
@@ -205,4 +205,4 @@ disown
 echo "== Rodando em segundo plano: $CONTAINER_PYTHON_BIN $SCRIPT =="
 echo "   Container: $CONTAINER_NAME"
 echo "   Log:       $LOG_FILE   (acompanhe com: tail -f \"$LOG_FILE\")"
-echo "   Pra parar: ./stop.sh"
+echo "   Pra parar: docker-lab stop"

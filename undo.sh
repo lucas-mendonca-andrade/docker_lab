@@ -4,7 +4,8 @@
 #    /etc/profile.d/ e o bloco entre marcadores em /etc/bash.bashrc — o resto fica intacto).
 # 2. Limite de potência da GPU (volta ao padrão de fábrica e remove o serviço systemd).
 #    O modo persistente (nvidia-smi -pm 1) fica ligado — é inofensivo.
-# 3. Permissões compartilhadas de state/ e logs/ (voltam a 755/644, só o dono grava —
+# 3. O comando /usr/local/bin/docker-lab (se for o nosso symlink).
+# 4. Permissões compartilhadas de state/ e logs/ (voltam a 755/644, só o dono grava —
 #    outros usuários deixam de conseguir rodar jobs).
 # Não apaga state/ nem logs/ (histórico e logs continuam lá).
 #
@@ -25,7 +26,7 @@ BASHRC_MARKER_BEGIN="# >>> docker_lab python guard >>>"
 BASHRC_MARKER_END="# <<< docker_lab python guard <<<"
 POWER_SERVICE="/etc/systemd/system/docker_lab-gpu-power-limit.service"
 
-echo "== 1/3 Removendo bloqueio de Python direto =="
+echo "== 1/4 Removendo bloqueio de Python direto =="
 REMOVED=()
 for name in python python3 python3.9 python3.10 python3.11 python3.12; do
     target="/usr/local/bin/$name"
@@ -42,7 +43,7 @@ fi
 echo "Função de shell removida (sessões já abertas mantêm até serem reabertas)."
 
 echo
-echo "== 2/3 Removendo limite de potência da GPU =="
+echo "== 2/4 Removendo limite de potência da GPU =="
 if [[ -f "$POWER_SERVICE" ]]; then
     systemctl disable docker_lab-gpu-power-limit.service >/dev/null 2>&1 || true
     rm -f "$POWER_SERVICE"
@@ -52,7 +53,14 @@ fi
 bash "$HERE/lib/gpu_power_limit.sh" reset
 
 echo
-echo "== 3/3 Removendo permissões compartilhadas de state/ e logs/ =="
+echo "== 3/4 Removendo comando docker-lab =="
+if [[ -L /usr/local/bin/docker-lab && "$(readlink -f /usr/local/bin/docker-lab)" == "$HERE/bin/docker-lab" ]]; then
+    rm -f /usr/local/bin/docker-lab
+    echo "Removido: /usr/local/bin/docker-lab"
+fi
+
+echo
+echo "== 4/4 Removendo permissões compartilhadas de state/ e logs/ =="
 [[ -d "$STATE_DIR" ]] && chmod 755 "$STATE_DIR" && find "$STATE_DIR" -maxdepth 1 -type f -exec chmod 644 {} +
 [[ -d "$LOGS_DIR" ]] && chmod 755 "$LOGS_DIR"
 echo "OK"

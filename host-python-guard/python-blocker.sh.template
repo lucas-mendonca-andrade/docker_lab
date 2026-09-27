@@ -20,8 +20,8 @@ Como rodar:
   1. Copie o exemplo pra raiz do SEU projeto (o job.env sempre fica lá):
      cp __REPO_ROOT__/job.env.example <raiz-do-seu-projeto>/job.env
   2. Edite job.env (SCRIPT, PYTHON_BIN, CORES, MEMORY_GB, GPU, GPU_MEMORY_GB, JOB_NAME).
-  3. Rode:
-     __REPO_ROOT__/run.sh <raiz-do-seu-projeto>/job.env
+  3. Na raiz do seu projeto, rode:
+     docker-lab run
 
 Mais detalhes: __REPO_ROOT__/README.md
 EOF

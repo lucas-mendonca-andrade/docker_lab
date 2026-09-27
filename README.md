@@ -23,7 +23,7 @@ sudo git clone https://github.com/lucas-mendonca-andrade/docker_lab.git /opt/doc
 sudo /opt/docker_lab/setup.sh
 ```
 
-O `setup.sh` libera o uso para todos os usuários, limita a potência da GPU a 80% e
+O `setup.sh` libera o uso para todos os usuários, instala o comando `docker-lab`, limita a potência da GPU a 80% e
 bloqueia a execução direta de Python. Para desfazer tudo: `sudo /opt/docker_lab/undo.sh`.
 
 ### 2. Preparar um novo script (cada usuário)
@@ -46,22 +46,11 @@ Edite o `job.env` (ele fica **sempre na raiz do seu projeto**):
 
 ### 3. Comandos
 
-**Ver status** (recursos em uso e livres):
-```bash
-/opt/docker_lab/status.sh
-```
+Na raiz do seu projeto (onde está o `job.env`):
 
-**Executar** (roda em segundo plano; log em `/opt/docker_lab/logs/<JOB_NAME>.log`):
 ```bash
-/opt/docker_lab/run.sh ~/meu_projeto/job.env
-```
-
-**Parar** (menu com os jobs ativos):
-```bash
-/opt/docker_lab/stop.sh
-```
-
-**Ver histórico** de execuções:
-```bash
-/opt/docker_lab/history.sh
+docker-lab run        # executa o job (em segundo plano; log em /opt/docker_lab/logs/<JOB_NAME>.log)
+docker-lab status     # recursos em uso e livres
+docker-lab stop       # para um job ativo (menu)
+docker-lab history    # histórico de execuções
 ```
