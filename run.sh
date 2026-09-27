@@ -118,7 +118,14 @@ fi
 HOST_PYTHON3_VERSION="$(readlink -f /usr/bin/python3 | grep -oE '3\.[0-9]+$' || echo 3.12)"
 
 echo "== Buildando imagem ($IMAGE) =="
-docker build -q --build-arg "HOST_PYTHON3_VERSION=$HOST_PYTHON3_VERSION" -t "$IMAGE" "$HERE" >/dev/null
+# Saida do build so aparece se falhar — senao avisos inofensivos (ex. "legacy builder
+# is deprecated" do Docker do Ubuntu 20.04, sem buildx) poluiriam todo 'docker-lab run'.
+if ! BUILD_OUTPUT=$(docker build -q --build-arg "HOST_PYTHON3_VERSION=$HOST_PYTHON3_VERSION" \
+        -t "$IMAGE" "$HERE" 2>&1); then
+    echo "$BUILD_OUTPUT" >&2
+    echo "== Falha ao buildar a imagem — veja o erro acima. ==" >&2
+    exit 1
+fi
 
 GPU_DESC="gpu=$GPU"
 if [[ "$GPU" != "none" ]]; then

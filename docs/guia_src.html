@@ -182,7 +182,7 @@ power.limit [W], power.default_limit [W]
   <tr><td><code>GPU_MEMORY_GB</code></td><td><code>2</code></td><td>VRAM máxima (obrigatório com GPU)</td></tr>
   <tr><td><code>JOB_NAME</code></td><td><code>{USERNAME}_treino</code></td><td>Nome do job. Mantenha o <code>{USERNAME}_</code>, que é trocado pelo seu usuário automaticamente.</td></tr>
 </table>
-<div class="note">Não sabe quanta VRAM o seu script usa? Rode uma vez e veja o pico: <code>torch.cuda.max_memory_allocated()</code> no PyTorch, ou <code>nvidia-smi</code> durante a execução.</div>
+<div class="note">O <code>nvidia-smi</code> mostra cerca de 0,3 GB a mais que o <code>GPU_MEMORY_GB</code> por job: é a memória fixa que o driver reserva para cada processo (contexto CUDA), e o teto de 80% já deixa folga para ela. Não sabe quanta VRAM o seu script usa? Rode uma vez e veja o pico: <code>torch.cuda.max_memory_allocated()</code> no PyTorch, ou <code>nvidia-smi</code> durante a execução.</div>
 
 <h3>Passo 2 — Executar com <code>docker-lab run</code></h3>
 <p>Abra o terminal do VS Code na pasta do projeto e rode <code>docker-lab run</code>. A validação e a reserva aparecem na tela, o job segue em segundo plano e o prompt volta na hora. Você pode fechar o VS Code ou desconectar, e o job continua rodando.</p>
