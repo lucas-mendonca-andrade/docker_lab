@@ -4,6 +4,7 @@ state/
 logs/
 job.env
 job_*.env
+!examples/job_*.env
 
 # Gerados por setup.sh a partir dos .template — não versionar o
 # gerado, só o template.

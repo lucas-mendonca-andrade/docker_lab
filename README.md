@@ -17,6 +17,7 @@
 ## Como usar
 
 Guia completo com exemplos no VS Code: [`docs/guia_docker_lab.pdf`](docs/guia_docker_lab.pdf).
+Para validar a instalação (testes de CPU, RAM e GPU): [`examples/`](examples/README.md).
 
 ### 1. Instalação (administrador, uma única vez)
 

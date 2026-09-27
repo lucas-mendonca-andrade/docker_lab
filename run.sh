@@ -158,6 +158,7 @@ GPU_ARGS=()
 if [[ "$GPU" != "none" ]]; then
     GPU_ARGS=(
         --gpus "device=${GPU}"
+        -e "NVIDIA_DRIVER_CAPABILITIES=compute,utility"
         -e "LD_PRELOAD=/usr/local/vgpu/libvgpu.so"
         -e "CUDA_DEVICE_MEMORY_LIMIT=${GPU_MEMORY_GB}g"
     )
