@@ -28,6 +28,14 @@ container termina, com o status final e o horario de fim. Status final e
 pelo run.sh quando existe um marcador de stop.sh — ver stop.sh/run.sh: sem o
 marcador, um `docker stop`/`kill` externo tambem cai em "erro", ja que exit code
 sozinho nao distingue um stop deliberado de um crash real, ex. OOM tambem sai 137).
+
+GPU: cada GPU e dividida entre jobs como a maquina e dividida em cores/RAM — cada job
+reserva uma QUANTIDADE de VRAM (--gpu-mem, GB) de uma GPU especifica (--gpu, indice).
+A soma dos pedidos de todos os jobs numa mesma GPU nunca passa de MAX_UTILIZATION da VRAM
+total. O limite POR JOB e imposto dentro do container pelo HAMi-core (ver
+Dockerfile/run.sh). O processamento da GPU NAO e reservado: jobs na mesma GPU dividem o
+processamento pelo time-slicing padrao da NVIDIA (ninguem sabe estimar "% de GPU" que
+precisa, e GPU a 100% nao trava a maquina — o que derruba jobs e estourar VRAM).
 """
 import argparse
 import datetime
@@ -40,17 +48,15 @@ import time
 CONTAINER_PREFIX = "docker-lab-"
 
 # Teto de uso: a SOMA de tudo que estiver reservado (todos os jobs juntos) nunca passa
-# disso, pra cada tipo de recurso (cores, memoria, GPU) — sempre sobra pelo menos 20%
+# disso, pra cada tipo de recurso (cores, memoria, VRAM) — sempre sobra pelo menos 20%
 # da maquina livre pro SO/SSH/outros processos, mesmo com varios jobs concorrentes.
 MAX_UTILIZATION = 0.8
 
 
 def resource_cap(total):
-    """Teto (em unidades do recurso) equivalente a MAX_UTILIZATION do total. Nunca
-    menor que 1 quando existe pelo menos 1 unidade — evita que um recurso discreto
-    pequeno (ex. maquina com 1 GPU so) fique permanentemente inutilizavel: 80% de 1
-    arredondaria pra 0, e "deixar 20% de 1 GPU ociosa" nao e um conceito que faca
-    sentido (diferente de cores/RAM, que sao realmente divisiveis)."""
+    """Teto (em unidades inteiras do recurso) equivalente a MAX_UTILIZATION do total.
+    Nunca menor que 1 quando existe pelo menos 1 unidade — evita que um recurso muito
+    pequeno fique permanentemente inutilizavel (80% de 1 arredondaria pra 0)."""
     if total <= 0:
         return 0
     return max(1, int(total * MAX_UTILIZATION))
@@ -74,19 +80,32 @@ def total_mem_gb():
     raise RuntimeError("MemTotal nao encontrado em /proc/meminfo")
 
 
-def gpu_index_list():
-    """Lista de indices de GPU existentes na maquina (lista vazia se nao houver
-    nvidia-smi — ex. simulacao numa maquina sem GPU)."""
-    try:
-        out = subprocess.run(
-            ["nvidia-smi", "--query-gpu=index", "--format=csv,noheader"],
-            capture_output=True, text=True, timeout=5,
-        )
-    except FileNotFoundError:
-        return []
-    if out.returncode != 0:
-        return []
-    return [line.strip() for line in out.stdout.splitlines() if line.strip()]
+def gpu_inventory():
+    """{indice: VRAM total em GB (float)} das GPUs da maquina ({} se nao houver
+    nvidia-smi). DOCKER_LAB_FAKE_GPUS="0:32607,1:24576" (indice:MiB) simula GPUs —
+    so pra testar a logica de reserva numa maquina de dev sem GPU."""
+    fake = os.environ.get("DOCKER_LAB_FAKE_GPUS")
+    if fake:
+        lines = [item.replace(":", ",") for item in fake.split(",") if item.strip()]
+    else:
+        try:
+            out = subprocess.run(
+                ["nvidia-smi", "--query-gpu=index,memory.total",
+                 "--format=csv,noheader,nounits"],
+                capture_output=True, text=True, timeout=5,
+            )
+        except FileNotFoundError:
+            return {}
+        if out.returncode != 0:
+            return {}
+        lines = out.stdout.splitlines()
+    inventory = {}
+    for line in lines:
+        if not line.strip():
+            continue
+        index, mib = (part.strip() for part in line.split(","))
+        inventory[index] = int(mib) / 1024
+    return inventory
 
 
 def container_is_running(job_name):
@@ -139,11 +158,11 @@ def used_mem_gb(state, exclude=None):
     return sum(job["memory_gb"] for name, job in state["jobs"].items() if name != exclude)
 
 
-def used_gpus(state, exclude=None):
-    return {
-        job["gpu"] for name, job in state["jobs"].items()
-        if name != exclude and job.get("gpu") not in (None, "none")
-    }
+def used_vram_gb(state, gpu):
+    """VRAM (GB) ja reservada na GPU `gpu`, somando todos os jobs."""
+    return sum(
+        job.get("gpu_memory_gb", 0) for job in state["jobs"].values() if job.get("gpu") == gpu
+    )
 
 
 def pick_free_cores(count, state):
@@ -204,33 +223,35 @@ def cmd_acquire(args):
         sys.exit(3)
 
     gpu = args.gpu if args.gpu and args.gpu != "none" else None
+    gpu_mem = 0
     if gpu is not None:
-        available = gpu_index_list()
-        if gpu not in available:
+        inventory = gpu_inventory()
+        if gpu not in inventory:
             print(
-                f"GPU '{gpu}' não existe nesta máquina (disponíveis: {available or 'nenhuma'}).",
+                f"GPU '{gpu}' não existe nesta máquina (disponíveis: {sorted(inventory) or 'nenhuma'}).",
                 file=sys.stderr,
             )
             sys.exit(4)
-        taken = used_gpus(state)
-        if gpu in taken:
-            holder = next(
-                name for name, job in state["jobs"].items() if job.get("gpu") == gpu
-            )
-            print(f"GPU '{gpu}' já está reservada por: {holder}.", file=sys.stderr)
-            sys.exit(5)
-        gpu_cap = resource_cap(len(available))
-        if len(taken) + 1 > gpu_cap:
+        gpu_mem = args.gpu_mem
+        if gpu_mem is None or gpu_mem <= 0:
+            print("Com GPU definida, GPU_MEMORY_GB (>= 1) é obrigatório no job.env.",
+                  file=sys.stderr)
+            sys.exit(2)
+        total_vram = inventory[gpu]
+        cap_vram = resource_cap(total_vram)
+        used_vram = used_vram_gb(state, gpu)
+        if used_vram + gpu_mem > cap_vram:
             print(
-                f"Reservar essa GPU ultrapassaria o teto de {int(MAX_UTILIZATION * 100)}% "
-                f"da máquina: já {len(taken)} de {len(available)} GPU(s) reservada(s), "
-                f"limite é {gpu_cap}.",
+                f"Pedido de {gpu_mem}GB de VRAM na GPU {gpu} ultrapassaria o teto de "
+                f"{int(MAX_UTILIZATION * 100)}%: já {used_vram}GB em uso, limite é "
+                f"{cap_vram}GB de {total_vram:.0f}GB totais.",
                 file=sys.stderr,
             )
-            sys.exit(6)
+            sys.exit(5)
 
     state["jobs"][args.name] = {
-        "cores": cores, "memory_gb": args.mem, "gpu": gpu, "reserved_at": time.time(),
+        "cores": cores, "memory_gb": args.mem, "gpu": gpu,
+        "gpu_memory_gb": gpu_mem, "reserved_at": time.time(),
     }
     write_state(args.state, state)
     # stdout: so os cores confirmados, pro run.sh usar direto em --cpuset-cpus
@@ -263,29 +284,32 @@ def cmd_status(args):
     used_m = used_mem_gb(state)
     reservable_mem = max(0, cap_m - used_m)
 
-    all_gpus = gpu_index_list()
-    cap_g = resource_cap(len(all_gpus))
-    used_g = used_gpus(state)
-    free_gpus = [g for g in all_gpus if g not in used_g]
-    reservable_gpus = max(0, cap_g - len(used_g))
-
     print(f"Cores: {len(busy_cores)} em uso, {reservable_cores} ainda reserváveis "
           f"(teto {pct}% = {cap_c} de {total_c} totais) — livres de verdade: {free_cores}")
     print(f"Memória: {used_m}GB em uso, {reservable_mem}GB ainda reserváveis "
           f"(teto {pct}% = {cap_m}GB de {total_m}GB totais)")
-    if all_gpus:
-        print(f"GPUs: {len(used_g)} em uso, {reservable_gpus} ainda reserváveis "
-              f"(teto {pct}% = {cap_g} de {len(all_gpus)} totais) — livres de verdade: {free_gpus}")
-    else:
+    inventory = gpu_inventory()
+    for gpu, total_vram in sorted(inventory.items()):
+        cap_vram = resource_cap(total_vram)
+        used_vram = used_vram_gb(state, gpu)
+        print(f"GPU {gpu} VRAM: {used_vram}GB em uso, {max(0, cap_vram - used_vram)}GB ainda "
+              f"reserváveis (teto {pct}% = {cap_vram}GB de {total_vram:.0f}GB totais)")
+    if not inventory:
         print("GPUs: máquina sem GPU (nvidia-smi não encontrado ou sem dispositivos)")
     print()
     if state["jobs"]:
         print("Jobs ativos:")
         for name, job in sorted(state["jobs"].items()):
-            print(f"  {name}: cores={job['cores']} mem={job['memory_gb']}GB "
-                  f"gpu={job.get('gpu') or 'none'}")
+            print(f"  {name}: {describe_job(job)}")
     else:
         print("Nenhum job ativo no momento.")
+
+
+def describe_job(job):
+    desc = f"cores={job['cores']} mem={job['memory_gb']}GB"
+    if job.get("gpu"):
+        desc += f" gpu={job['gpu']} vram={job.get('gpu_memory_gb', 0)}GB"
+    return desc
 
 
 def _now_iso():
@@ -376,7 +400,7 @@ def cmd_list(args):
     if stale:
         write_state(args.state, state)
     for name, job in sorted(state["jobs"].items()):
-        desc = f"{name} (cores={job['cores']} mem={job['memory_gb']}GB gpu={job.get('gpu') or 'none'})"
+        desc = f"{name} ({describe_job(job)})"
         print(f"{name}\t{desc}")
 
 
@@ -390,7 +414,8 @@ def main():
     p_acquire.add_argument("--name", required=True)
     p_acquire.add_argument("--cores", required=True, help="quantidade de cores, ex.: 2")
     p_acquire.add_argument("--mem", required=True, type=int, help="GB")
-    p_acquire.add_argument("--gpu", default="none")
+    p_acquire.add_argument("--gpu", default="none", help="indice da GPU, ou none")
+    p_acquire.add_argument("--gpu-mem", type=int, dest="gpu_mem", help="VRAM em GB")
     p_acquire.set_defaults(func=cmd_acquire)
 
     p_release = sub.add_parser("release", help="Libera a reserva de um job")

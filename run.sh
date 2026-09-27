@@ -9,7 +9,7 @@
 # 1. Le a config (job.env).
 # 2. Builda a imagem generica deste docker_lab/ (rapido depois da 1a vez, o Docker
 #    cacheia as camadas que nao mudaram).
-# 3. Reserva os cores/memoria/gpu pedidos (sob flock, ver lib/reserve.py) — recusa na
+# 3. Reserva os cores/memoria/VRAM de GPU pedidos (sob flock, ver lib/reserve.py) — recusa na
 #    hora se ja estiver em uso por outro job, em vez de estourar a maquina. Tudo isso
 #    (1-3) acontece NA HORA, na tela — se der erro, voce fica sabendo na hora.
 # 4. Sobe o container em SEGUNDO PLANO (nohup, sobrevive a fechar o terminal) e volta o
@@ -20,7 +20,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Caminho fixo pro Python REAL do host (nao resolvido por PATH) — se
-# setup_block_direct_python.sh estiver ativo, 'python3' no PATH vira um aviso em vez do
+# o bloqueio de Python do setup.sh estiver ativo, 'python3' no PATH vira um aviso em vez do
 # interpretador de verdade; o docker_lab precisa continuar funcionando mesmo assim.
 HOST_PYTHON="${DOCKER_LAB_HOST_PYTHON:-/usr/bin/python3}"
 STATE_DIR="$HERE/state"
@@ -55,6 +55,7 @@ set -a; source "$JOB_ENV"; set +a
 : "${MEMORY_GB:?defina MEMORY_GB no job.env}"
 : "${JOB_NAME:?defina JOB_NAME no job.env}"
 : "${GPU:=none}"
+: "${GPU_MEMORY_GB:=0}"
 : "${PYTHON_BIN:=python3}"
 
 # REPO_ROOT: raiz do projeto de quem esta rodando (onde SCRIPT/PYTHON_BIN vao ser
@@ -110,9 +111,14 @@ fi
 echo "== Buildando imagem ($IMAGE) =="
 docker build -q -t "$IMAGE" "$HERE" >/dev/null
 
-echo "== Reservando recurso para '$JOB_NAME' (cores=$CORES mem=${MEMORY_GB}GB gpu=$GPU) =="
+GPU_DESC="gpu=$GPU"
+if [[ "$GPU" != "none" ]]; then
+    GPU_DESC+=" vram=${GPU_MEMORY_GB}GB"
+fi
+echo "== Reservando recurso para '$JOB_NAME' (cores=$CORES mem=${MEMORY_GB}GB $GPU_DESC) =="
 if ! ALLOC_CORES=$(flock "$LOCK_FILE" "$HOST_PYTHON" "$HERE/lib/reserve.py" --state "$STATE_FILE" \
-        acquire --name "$JOB_NAME" --cores "$CORES" --mem "$MEMORY_GB" --gpu "$GPU"); then
+        acquire --name "$JOB_NAME" --cores "$CORES" --mem "$MEMORY_GB" --gpu "$GPU" \
+        --gpu-mem "$GPU_MEMORY_GB"); then
     echo "== Não foi possível reservar recurso — veja a mensagem acima. Rode ./status.sh para ver o que está em uso. ==" >&2
     exit 1
 fi
@@ -135,9 +141,17 @@ rm -f "$STOP_MARKER"
 RUN_ID=$(flock "$HISTORY_LOCK" "$HOST_PYTHON" "$HERE/lib/reserve.py" --history "$HISTORY_FILE" \
     history-start --name "$JOB_NAME" --user "$REAL_USER" --script "$SCRIPT")
 
+# GPU: o container so enxerga a GPU pedida (--gpus), e o HAMi-core (libvgpu.so, ver
+# Dockerfile), carregado via LD_PRELOAD em todo processo do container, limita a VRAM ao
+# que este job reservou (CUDA_DEVICE_MEMORY_LIMIT — alocar alem disso da "CUDA out of
+# memory" so neste job). Processamento nao e limitado (ver docstring do reserve.py).
 GPU_ARGS=()
 if [[ "$GPU" != "none" ]]; then
-    GPU_ARGS=(--gpus "device=${GPU}")
+    GPU_ARGS=(
+        --gpus "device=${GPU}"
+        -e "LD_PRELOAD=/usr/local/vgpu/libvgpu.so"
+        -e "CUDA_DEVICE_MEMORY_LIMIT=${GPU_MEMORY_GB}g"
+    )
 fi
 
 # O container em si roda num script gerado aqui (nao direto neste processo), pra poder

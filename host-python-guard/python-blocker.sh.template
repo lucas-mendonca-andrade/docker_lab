@@ -1,5 +1,5 @@
 #!/bin/sh
-# GERADO por setup_block_direct_python.sh — não edite direto (edite o .template e rode
+# GERADO por setup.sh — não edite direto (edite o .template e rode
 # o setup de novo). Instalado em /usr/local/bin/python, python3, python3.X — como
 # /usr/local/bin normalmente vem ANTES de /usr/bin no PATH, isso intercepta quem digita
 # 'python3'/'python' direto no terminal, ou roda um script com shebang
@@ -19,7 +19,7 @@ garante limite de CPU/RAM/GPU e evita travar a máquina pros outros usuários.
 Como rodar:
   1. Copie o exemplo pra raiz do SEU projeto (o job.env sempre fica lá):
      cp __REPO_ROOT__/job.env.example <raiz-do-seu-projeto>/job.env
-  2. Edite job.env (SCRIPT, PYTHON_BIN, CORES, MEMORY_GB, GPU, JOB_NAME).
+  2. Edite job.env (SCRIPT, PYTHON_BIN, CORES, MEMORY_GB, GPU, GPU_MEMORY_GB, JOB_NAME).
   3. Rode:
      __REPO_ROOT__/run.sh <raiz-do-seu-projeto>/job.env
 

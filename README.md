@@ -3,12 +3,14 @@
 ## Objetivo
 
 - Organizar e limitar múltiplas execuções simultâneas em um servidor de experimentos
-  compartilhado (CPU, RAM e GPU, com teto de 80% da máquina).
+  compartilhado (CPU, RAM e VRAM da GPU), com teto de 80% da máquina
+  somando todos os jobs, e cada job limitado ao que pediu.
 
 ## Como faz isso?
 
 - **Bloqueio de execução direta de `.py`**: `python3 script.py` no terminal mostra um
   aviso em vez de executar.
+- **Limite de potência da GPU em 80%**: evita que a GPU no máximo derrube a máquina.
 - **Execução obrigatória em Docker**: todo script roda em um container com recursos
   limitados e reservados, sem derrubar a máquina para os outros usuários.
 
@@ -18,11 +20,11 @@
 
 ```bash
 sudo git clone https://github.com/lucas-mendonca-andrade/docker_lab.git /opt/docker_lab
-sudo /opt/docker_lab/setup_shared_install.sh
-sudo /opt/docker_lab/setup_block_direct_python.sh   # bloqueio de python direto
+sudo /opt/docker_lab/setup.sh
 ```
 
-Para desfazer o bloqueio: `sudo /opt/docker_lab/undo_block_direct_python.sh`.
+O `setup.sh` libera o uso para todos os usuários, limita a potência da GPU a 80% e
+bloqueia a execução direta de Python. Para desfazer tudo: `sudo /opt/docker_lab/undo.sh`.
 
 ### 2. Preparar um novo script (cada usuário)
 
@@ -38,7 +40,8 @@ Edite o `job.env` (ele fica **sempre na raiz do seu projeto**):
 | `PYTHON_BIN` | `venv/bin/python`              | Python usado (venv do projeto)           |
 | `CORES`      | `2`                            | Quantidade de cores                      |
 | `MEMORY_GB`  | `16`                           | Memória máxima                           |
-| `GPU`        | `none` ou `0`                  | GPU a reservar                           |
+| `GPU`        | `none` ou `0`                  | GPU a usar (índice)                      |
+| `GPU_MEMORY_GB` | `4`                         | VRAM máxima (só com GPU)                 |
 | `JOB_NAME`   | `{USERNAME}_experimento1`      | Nome do job (mantenha o `{USERNAME}_`)   |
 
 ### 3. Comandos

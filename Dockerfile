@@ -10,6 +10,19 @@
 # criou (ex. /usr/bin/python3.11), que precisa existir de verdade dentro do container
 # pra esse link resolver. deadsnakes instala cada versao exatamente nesse caminho
 # padrao do Ubuntu, entao qualquer venv dessas versoes funciona sem hack por versao.
+
+# Estagio 1: compila o HAMi-core (libvgpu.so), que limita a VRAM da GPU por container
+# (ver run.sh: CUDA_DEVICE_MEMORY_LIMIT via LD_PRELOAD). So precisa dos headers do CUDA pra compilar, nao de GPU. CUDA 12.8: minimo
+# com suporte a Blackwell (RTX 5090) e o mesmo que o driver 570 das maquinas do lab
+# expoe — headers mais novos que o driver poderiam referenciar funcoes que ele nao tem.
+# Commit fixado pra build reproduzivel.
+FROM nvidia/cuda:12.8.1-devel-ubuntu24.04 AS hami-core
+ARG HAMI_CORE_COMMIT=ec5d85a3d709e5ed138a1668ebfefd366c05ca1e
+RUN apt-get update && apt-get install -y --no-install-recommends cmake git ca-certificates \
+    && git clone https://github.com/Project-HAMi/HAMi-core.git /hami-core \
+    && cd /hami-core && git checkout "$HAMI_CORE_COMMIT" \
+    && bash ./build.sh
+
 FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -48,6 +61,11 @@ RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
 # qualquer 'taskset' real que venha a ser instalado depois.
 COPY fake-bin/taskset /usr/local/bin/taskset
 RUN chmod +x /usr/local/bin/taskset
+
+# HAMi-core: so e carregado (LD_PRELOAD) em jobs com GPU — ver run.sh. /tmp/vgpulock e
+# o diretorio de lock que ele exige.
+COPY --from=hami-core /hami-core/build/libvgpu.so /usr/local/vgpu/libvgpu.so
+RUN mkdir -p /tmp/vgpulock && chmod 1777 /tmp/vgpulock
 
 # Sem WORKDIR fixo aqui de proposito: o run.sh monta o repo no MESMO caminho absoluto
 # que ele tem no host (nao em /workspace) e sempre passa `-w` explicito no `docker run`

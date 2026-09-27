@@ -1,4 +1,4 @@
-# GERADO por setup_block_direct_python.sh — não edite direto (edite o .template e rode
+# GERADO por setup.sh — não edite direto (edite o .template e rode
 # o setup de novo). Pensado pra ser SOURCED (não executado) por shells bash
 # interativas — /etc/profile.d/ (shells de login) e /etc/bash.bashrc (shells
 # interativas não-login).
@@ -21,7 +21,7 @@ garante limite de CPU/RAM/GPU e evita travar a máquina pros outros usuários.
 Como rodar:
   1. Copie o exemplo pra raiz do SEU projeto (o job.env sempre fica lá):
      cp __REPO_ROOT__/job.env.example <raiz-do-seu-projeto>/job.env
-  2. Edite job.env (SCRIPT, PYTHON_BIN, CORES, MEMORY_GB, GPU, JOB_NAME).
+  2. Edite job.env (SCRIPT, PYTHON_BIN, CORES, MEMORY_GB, GPU, GPU_MEMORY_GB, JOB_NAME).
   3. Rode:
      __REPO_ROOT__/run.sh <raiz-do-seu-projeto>/job.env
 

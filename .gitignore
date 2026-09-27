@@ -5,7 +5,7 @@ logs/
 job.env
 job_*.env
 
-# Gerados por setup_block_direct_python.sh a partir dos .template — não versionar o
+# Gerados por setup.sh a partir dos .template — não versionar o
 # gerado, só o template.
 host-python-guard/python-blocker.sh
 host-python-guard/python-blocker-function.sh
