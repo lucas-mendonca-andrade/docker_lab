@@ -1,0 +1,4 @@
+# Dependencias instaladas na IMAGEM (nao no venv do projeto que voce ja usa).
+# Deixe vazio se seu script so precisa do que ja esta no venv do repo (ver PYTHON_BIN
+# no job.env — nesse caso o container so executa esse venv existente, nao instala nada
+# novo aqui). Adicione aqui so o que faltar quando NAO estiver usando um venv pronto.

@@ -1,0 +1,16 @@
+#!/bin/sh
+# Substitui o 'taskset' real dentro do container (fica em /usr/local/bin, que vem antes
+# de /usr/bin no PATH da imagem — ver Dockerfile). Varios run_all_frameworks_*.py deste
+# repo chamam 'taskset -c X,Y comando...' com X,Y fixos no proprio codigo Python. Como
+# o wrapper (run.sh/lib/reserve.py) escolhe os cores LIVRES da maquina (que podem nao
+# ser X,Y), deixar o taskset real tentar restringir pra X,Y ia falhar com "Invalid
+# argument" sempre que X,Y nao estivessem entre os cores liberados pro container.
+#
+# A restricao de verdade ja vem do --cpuset-cpus do 'docker run' (ver run.sh). Este
+# shim so descarta o '-c <lista>' do chamador e roda o comando normalmente, herdando a
+# afinidade que o container ja tem (os cores reservados de verdade).
+set -e
+if [ "$1" = "-c" ]; then
+    shift 2
+fi
+exec "$@"

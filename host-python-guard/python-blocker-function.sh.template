@@ -1,0 +1,37 @@
+# GERADO por setup_block_direct_python.sh — não edite direto (edite o .template e rode
+# o setup de novo). Pensado pra ser SOURCED (não executado) por shells bash
+# interativas — /etc/profile.d/ (shells de login) e /etc/bash.bashrc (shells
+# interativas não-login).
+#
+# Por que uma função de shell, além do wrapper em /usr/local/bin: o bash resolve
+# comandos checando FUNÇÕES antes de procurar no PATH — então, mesmo com um venv
+# ativado (que só prepende venv/bin ao PATH via 'source venv/bin/activate'), digitar
+# 'python3' continua caindo aqui, porque a função já existia antes da ativação do venv.
+# Isso fecha o buraco que o wrapper em /usr/local/bin sozinho não cobria (venv ativado).
+#
+# Usa 'return', não 'exit' — isso roda DENTRO da shell interativa do usuário; um 'exit'
+# aqui fecharia o terminal dele inteiro.
+_docker_lab_python_blocked() {
+    cat >&2 <<'EOF'
+[docker_lab] Execução direta de Python bloqueada nesta máquina.
+
+Scripts Python devem rodar DENTRO de um container gerenciado pelo docker_lab, que
+garante limite de CPU/RAM/GPU e evita travar a máquina pros outros usuários.
+
+Como rodar:
+  1. Copie o exemplo pra raiz do SEU projeto (o job.env sempre fica lá):
+     cp __REPO_ROOT__/job.env.example <raiz-do-seu-projeto>/job.env
+  2. Edite job.env (SCRIPT, PYTHON_BIN, CORES, MEMORY_GB, GPU, JOB_NAME).
+  3. Rode:
+     __REPO_ROOT__/run.sh <raiz-do-seu-projeto>/job.env
+
+Mais detalhes: __REPO_ROOT__/README.md
+EOF
+    return 1
+}
+python() { _docker_lab_python_blocked; }
+python3() { _docker_lab_python_blocked; }
+python3.9() { _docker_lab_python_blocked; }
+python3.10() { _docker_lab_python_blocked; }
+python3.11() { _docker_lab_python_blocked; }
+python3.12() { _docker_lab_python_blocked; }

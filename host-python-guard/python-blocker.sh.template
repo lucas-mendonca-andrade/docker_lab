@@ -1,0 +1,28 @@
+#!/bin/sh
+# GERADO por setup_block_direct_python.sh — não edite direto (edite o .template e rode
+# o setup de novo). Instalado em /usr/local/bin/python, python3, python3.X — como
+# /usr/local/bin normalmente vem ANTES de /usr/bin no PATH, isso intercepta quem digita
+# 'python3'/'python' direto no terminal, ou roda um script com shebang
+# '#!/usr/bin/env python3' (o 'env' faz busca por PATH, então também cai aqui).
+#
+# NÃO cobre (ver README, seção sobre este bloqueio): caminho absoluto digitado à mão
+# (ex. /usr/bin/python3.9 script.py), um venv JÁ ATIVADO (o python do venv aponta direto
+# pro interpretador real, sem busca por PATH), ou um shebang fixo tipo
+# '#!/usr/bin/python3' (sem 'env'). Isso é uma barreira contra esquecimento, não uma
+# trava de segurança contra alguém decidido a contornar.
+cat >&2 <<'EOF'
+[docker_lab] Execução direta de Python bloqueada nesta máquina.
+
+Scripts Python devem rodar DENTRO de um container gerenciado pelo docker_lab, que
+garante limite de CPU/RAM/GPU e evita travar a máquina pros outros usuários.
+
+Como rodar:
+  1. Copie o exemplo pra raiz do SEU projeto (o job.env sempre fica lá):
+     cp __REPO_ROOT__/job.env.example <raiz-do-seu-projeto>/job.env
+  2. Edite job.env (SCRIPT, PYTHON_BIN, CORES, MEMORY_GB, GPU, JOB_NAME).
+  3. Rode:
+     __REPO_ROOT__/run.sh <raiz-do-seu-projeto>/job.env
+
+Mais detalhes: __REPO_ROOT__/README.md
+EOF
+exit 1

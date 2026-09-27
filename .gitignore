@@ -1,0 +1,15 @@
+# Estado de reservas, logs e configs pessoais de execução — locais por máquina/aluno,
+# nunca versionados.
+state/
+logs/
+job.env
+job_*.env
+
+# Gerados por setup_block_direct_python.sh a partir dos .template — não versionar o
+# gerado, só o template.
+host-python-guard/python-blocker.sh
+host-python-guard/python-blocker-function.sh
+
+__pycache__/
+*.pyc
+CLAUDE.md
