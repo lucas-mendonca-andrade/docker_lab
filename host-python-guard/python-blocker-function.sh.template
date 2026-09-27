@@ -26,6 +26,7 @@ Como rodar:
      docker-lab run
 
 Mais detalhes: __REPO_ROOT__/README.md
+Projeto no GitHub: https://github.com/lucas-mendonca-andrade/docker_lab
 EOF
     return 1
 }

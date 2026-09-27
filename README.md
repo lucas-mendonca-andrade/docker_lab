@@ -16,6 +16,8 @@
 
 ## Como usar
 
+Guia completo com exemplos no VS Code: [`docs/guia_docker_lab.pdf`](docs/guia_docker_lab.pdf).
+
 ### 1. Instalação (administrador, uma única vez)
 
 ```bash

@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>docker_lab — Guia de instalação e uso</title>
+<style>
+@page { size: A4; margin: 16mm 15mm 16mm 15mm; }
+:root {
+  --ink: #1d2433; --muted: #5b6475; --line: #d9dee7; --accent: #1f6feb; --accent-soft: #e8f0fe;
+  --warn: #9a3412; --warn-soft: #fff4ed; --ok: #166534; --ok-soft: #ecfdf3;
+}
+* { box-sizing: border-box; }
+body { font-family: "DejaVu Sans", "Liberation Sans", sans-serif; color: var(--ink); font-size: 10.2pt; line-height: 1.5; margin: 0; background: #fff; }
+h1 { font-size: 24pt; margin: 0 0 4px; letter-spacing: -0.5px; }
+h2 { font-size: 15pt; margin: 22px 0 8px; padding-bottom: 5px; border-bottom: 2px solid var(--accent); break-after: avoid; }
+h3 { font-size: 11.5pt; margin: 16px 0 6px; break-after: avoid; }
+p { margin: 6px 0; }
+code { font-family: "DejaVu Sans Mono", monospace; font-size: 8.8pt; background: #f1f3f7; padding: 1px 4px; border-radius: 3px; }
+pre.cmd { font-family: "DejaVu Sans Mono", monospace; font-size: 8.6pt; background: #0f172a; color: #e2e8f0; padding: 10px 12px; border-radius: 6px; margin: 8px 0; white-space: pre-wrap; break-inside: avoid; }
+pre.cmd .c { color: #94a3b8; }
+a { color: var(--accent); text-decoration: none; }
+.cover { padding: 26px 26px 22px; border-radius: 10px; background: linear-gradient(135deg, #0f172a, #1e3a8a); color: #fff; margin-bottom: 14px; }
+.cover .sub { color: #c7d2fe; font-size: 11pt; margin-top: 6px; }
+.cover .meta { margin-top: 14px; font-size: 8.8pt; color: #a5b4fc; }
+.cover a { color: #fff; text-decoration: underline; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0; }
+.grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 10px 0; }
+.card { border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; break-inside: avoid; }
+.card b { display: block; margin-bottom: 2px; }
+.card.small { font-size: 9pt; }
+.note { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 7px 11px; border-radius: 0 6px 6px 0; margin: 9px 0; font-size: 9.4pt; break-inside: avoid; }
+.note.warn { border-color: #ea580c; background: var(--warn-soft); }
+.note.ok { border-color: #16a34a; background: var(--ok-soft); }
+table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 9.2pt; break-inside: avoid; }
+th, td { text-align: left; padding: 5px 7px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { background: #f5f7fb; font-weight: bold; }
+.steps { counter-reset: s; }
+.flow { display: flex; align-items: stretch; gap: 0; margin: 12px 0; break-inside: avoid; }
+.flow .box { flex: 1; border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; font-size: 8.4pt; text-align: center; background: #fafbfd; }
+.flow .box b { display: block; font-size: 8.9pt; color: var(--accent); margin-bottom: 2px; }
+.flow .arr { width: 16px; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 12pt; }
+figure { margin: 12px 0 14px; break-inside: avoid; }
+figcaption { font-size: 8.6pt; color: var(--muted); margin-top: 5px; text-align: center; }
+.pb { break-before: page; }
+
+/* ---------- Janela estilo VS Code ---------- */
+.vsc { border-radius: 8px; overflow: hidden; border: 1px solid #111; background: #1e1e1e; font-family: "DejaVu Sans", sans-serif; box-shadow: 0 4px 14px rgba(0,0,0,.18); }
+.vsc .title { height: 26px; background: #323233; color: #cccccc; font-size: 8pt; display: flex; align-items: center; padding: 0 10px; position: relative; }
+.vsc .title .dots span { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; }
+.vsc .title .t { position: absolute; left: 0; right: 0; text-align: center; pointer-events: none; }
+.vsc .body { display: flex; }
+.vsc .act { width: 34px; background: #333333; display: flex; flex-direction: column; align-items: center; padding-top: 8px; gap: 12px; }
+.vsc .act i { display: block; width: 16px; height: 16px; border: 2px solid #858585; border-radius: 3px; }
+.vsc .act i.on { border-color: #ffffff; }
+.vsc .side { width: 150px; background: #252526; color: #cccccc; font-size: 7.6pt; padding: 6px 0; }
+.vsc .side .h { padding: 0 10px 6px; font-size: 7pt; letter-spacing: .6px; color: #bbbbbb; }
+.vsc .side .sec { padding: 2px 8px; font-weight: bold; font-size: 7.2pt; }
+.vsc .side .it { padding: 2px 8px 2px 20px; white-space: nowrap; }
+.vsc .side .it.sel { background: #37373d; outline: 1px solid #0078d4; outline-offset: -1px; }
+.vsc .side .it .ic { display: inline-block; width: 12px; font-size: 7pt; }
+.ic.py { color: #4b8bbe; } .ic.env { color: #e5c07b; } .ic.dir { color: #c09553; }
+.vsc .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.vsc .tabs { display: flex; background: #252526; height: 24px; }
+.vsc .tab { padding: 0 12px; font-size: 7.6pt; color: #969696; display: flex; align-items: center; border-right: 1px solid #1e1e1e; background: #2d2d2d; }
+.vsc .tab.on { background: #1e1e1e; color: #ffffff; border-top: 1px solid #0078d4; }
+.vsc .ed { font-family: "DejaVu Sans Mono", monospace; font-size: 7.6pt; line-height: 1.55; color: #d4d4d4; padding: 6px 0; display: flex; }
+.vsc .ed .ln { color: #6e7681; text-align: right; padding: 0 10px 0 8px; user-select: none; }
+.vsc .ed .code { white-space: pre; }
+.k { color: #9cdcfe; } .v { color: #ce9178; } .cm { color: #6a9955; } .n { color: #b5cea8; } .kw { color: #c586c0; } .fn { color: #dcdcaa; } .bi { color: #4ec9b0; }
+.vsc .panel { border-top: 1px solid #3c3c3c; background: #1e1e1e; }
+.vsc .ptabs { display: flex; gap: 14px; font-size: 7pt; color: #969696; padding: 5px 12px 3px; letter-spacing: .4px; }
+.vsc .ptabs .on { color: #e7e7e7; border-bottom: 1px solid #e7e7e7; padding-bottom: 2px; }
+.vsc pre.term { margin: 0; padding: 4px 12px 8px; font-family: "DejaVu Sans Mono", monospace; font-size: 6.9pt; line-height: 1.45; color: #cccccc; white-space: pre-wrap; word-break: break-word; }
+.term .pu { color: #23d18b; font-weight: bold; } .term .pp { color: #3b8eea; font-weight: bold; }
+.term .y { color: #e5e510; } .term .r { color: #f14c4c; } .term .g { color: #23d18b; } .term .b { color: #3b8eea; } .term .dim { color: #8b8b8b; }
+.vsc .status { height: 18px; background: #007acc; color: #fff; font-size: 7pt; display: flex; align-items: center; gap: 12px; }
+.vsc pre.term.nowrap { white-space: pre; font-size: 6.2pt; }
+.vsc .status .remote { background: #16825d; height: 100%; display: flex; align-items: center; padding: 0 9px; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>docker_lab</h1>
+  <div class="sub">Guia de instalação e uso — execução de experimentos com CPU, RAM e GPU controlados em servidor compartilhado</div>
+  <div class="meta">Projeto: <a href="https://github.com/lucas-mendonca-andrade/docker_lab">github.com/lucas-mendonca-andrade/docker_lab</a></div>
+</div>
+
+<h2>1. Para que serve</h2>
+<p>Vários alunos usam a mesma máquina de laboratório. Sem controle, um único experimento pesado podia esgotar CPU, memória ou GPU, derrubar o acesso remoto de todos e até reiniciar a máquina. O docker_lab resolve isso com três mecanismos:</p>
+<div class="grid3">
+  <div class="card small"><b>Execução em container</b>Todo script Python roda dentro de um container Docker, com a quantidade de CPU, RAM e VRAM que o próprio aluno pediu, e nada além disso.</div>
+  <div class="card small"><b>Teto de 80% da máquina</b>A soma do que todos os jobs reservaram nunca passa de 80% de cada recurso. Um pedido que ultrapassaria o teto é recusado na hora.</div>
+  <div class="card small"><b>Proteções na máquina</b>A potência da GPU fica limitada a 80%, e rodar <code>python3</code> direto no terminal mostra um aviso em vez de executar.</div>
+</div>
+
+<h3>Como uma execução acontece</h3>
+<div class="flow">
+  <div class="box"><b>job.env</b>o aluno descreve o script e os recursos</div><div class="arr">→</div>
+  <div class="box"><b>docker-lab run</b>valida a configuração e monta a imagem</div><div class="arr">→</div>
+  <div class="box"><b>Reserva</b>confere o teto de 80% somando todos os jobs</div><div class="arr">→</div>
+  <div class="box"><b>Container</b>roda em segundo plano, preso aos limites pedidos</div><div class="arr">→</div>
+  <div class="box"><b>Fim</b>libera a reserva e registra no histórico</div>
+</div>
+
+<table>
+  <tr><th>Recurso</th><th>Limite por job (definido no job.env)</th><th>Teto conjunto (todos os jobs)</th></tr>
+  <tr><td>CPU</td><td><code>CORES</code>: quantidade de cores</td><td>80% dos cores da máquina</td></tr>
+  <tr><td>RAM</td><td><code>MEMORY_GB</code>: passou disso, o job é encerrado</td><td>80% da RAM</td></tr>
+  <tr><td>VRAM (memória da GPU)</td><td><code>GPU_MEMORY_GB</code>: passou disso, o job recebe <code>CUDA out of memory</code></td><td>80% da VRAM de cada GPU</td></tr>
+  <tr><td>Potência da GPU</td><td>não é definida por job</td><td>80% da potência de fábrica (TITAN V: 250 W → 200 W)</td></tr>
+</table>
+<p style="font-size:9pt;color:var(--muted)">O processamento da GPU não é reservado por job: quando dois jobs usam a mesma GPU, o driver da NVIDIA alterna entre eles, e cada um fica proporcionalmente mais lento.</p>
+
+<h2 class="pb">2. Instalação (administrador, uma única vez)</h2>
+<p>A instalação é feita na máquina do laboratório por quem tem <code>sudo</code>. São dois comandos:</p>
+<pre class="cmd">sudo git clone https://github.com/lucas-mendonca-andrade/docker_lab.git /opt/docker_lab
+sudo /opt/docker_lab/setup.sh</pre>
+<div class="note warn"><b>Instale em <code>/opt/docker_lab</code>, como root, e não mova a pasta depois.</b> Se a pasta ficar na home de um aluno, os outros usuários não conseguem acessá-la, e esse aluno poderia alterar scripts que rodam como root. Para mudar de lugar: <code>undo.sh</code>, mover a pasta e rodar <code>setup.sh</code> de novo.</div>
+
+<p>O <code>setup.sh</code> faz quatro coisas, e pode ser rodado de novo sem problema (por exemplo, depois de um <code>git pull</code>):</p>
+<table>
+  <tr><th>Passo</th><th>O que faz</th></tr>
+  <tr><td>1. Instalação compartilhada</td><td>Libera <code>state/</code> e <code>logs/</code> para todos os usuários, que passam a gravar no mesmo controle de reservas. Usuários criados no futuro já funcionam, sem nenhum comando extra.</td></tr>
+  <tr><td>2. Potência da GPU</td><td>Limita cada GPU a 80% da potência de fábrica e instala um serviço do systemd que reaplica o limite a cada boot.</td></tr>
+  <tr><td>3. Comando <code>docker-lab</code></td><td>Instala o comando <code>docker-lab</code> para todos os usuários.</td></tr>
+  <tr><td>4. Bloqueio de Python direto</td><td>Faz <code>python3 script.py</code> no terminal mostrar um aviso em vez de executar, inclusive com venv ativado. Os binários do sistema não são alterados.</td></tr>
+</table>
+
+<figure>
+<div class="vsc">
+  <div class="title"><span class="dots"><span style="background:#ff5f57"></span><span style="background:#febc2e"></span><span style="background:#28c840"></span></span><span class="t">docker_lab [SSH: ainetmachine] — Visual Studio Code</span></div>
+  <div class="body">
+    <div class="act"><i class="on"></i><i></i><i></i><i></i></div>
+    <div class="main">
+      <div class="panel" style="border-top:none">
+        <div class="ptabs"><span>PROBLEMS</span><span>OUTPUT</span><span class="on">TERMINAL</span></div>
+<pre class="term"><span class="pu">admin@ainetmachine</span>:<span class="pp">~</span>$ sudo /opt/docker_lab/setup.sh
+== 1/4 Instalação compartilhada: liberando state/ e logs/ pra todos os usuários ==
+OK
+
+== 2/4 Limite de potência da GPU (80%) ==
+GPU 0: limite de potência = 200W (padrão de fábrica 250W)
+Serviço /etc/systemd/system/docker_lab-gpu-power-limit.service habilitado (reaplica o limite a cada boot).
+
+== 3/4 Comando docker-lab ==
+Instalado: /usr/local/bin/docker-lab
+
+== 4/4 Bloqueio de Python direto no host ==
+Symlinks: /usr/local/bin/python /usr/local/bin/python3 /usr/local/bin/python3.9 /usr/local/bin/python3.10 /usr/local/bin/python3.11 /usr/local/bin/python3.12
+Função de shell: /etc/profile.d/99-docker_lab-python-guard.sh (referenciada em /etc/bash.bashrc)
+
+== Pronto ==
+Qualquer usuário já pode usar, na raiz do projeto: docker-lab run
+O bloqueio de Python vale pra sessões NOVAS (nova conexão SSH ou 'bash -l').
+Desfazer tudo: sudo /opt/docker_lab/undo.sh
+<span class="pu">admin@ainetmachine</span>:<span class="pp">~</span>$ nvidia-smi --query-gpu=power.limit,power.default_limit --format=csv
+power.limit [W], power.default_limit [W]
+200.00 W, 250.00 W</pre>
+      </div>
+    </div>
+  </div>
+  <div class="status"><span class="remote">&gt;&lt; SSH: ainetmachine</span><span>bash</span></div>
+</div>
+<figcaption>Figura 1 — Instalação pelo terminal do VS Code conectado à máquina do laboratório (Remote-SSH), com a conferência do limite de potência no final.</figcaption>
+</figure>
+
+<div class="note">Quem estava conectado por SSH durante a instalação só passa a ter o bloqueio completo de Python depois de reconectar. <b>Para desfazer tudo:</b> <code>sudo /opt/docker_lab/undo.sh</code>. Ele remove o bloqueio, volta a GPU à potência de fábrica, remove o comando <code>docker-lab</code> e devolve as permissões originais. Histórico e logs são preservados.</div>
+
+<h2>3. Executando um experimento (cada aluno)</h2>
+
+<h3>Passo 1 — Criar o <code>job.env</code> na raiz do projeto</h3>
+<pre class="cmd">cp /opt/docker_lab/job.env.example ~/meu_projeto/job.env</pre>
+<p>O <code>job.env</code> fica <b>sempre na raiz do projeto</b>. A pasta onde ele está é montada dentro do container, e os caminhos <code>SCRIPT</code> e <code>PYTHON_BIN</code> são relativos a ela.</p>
+<table>
+  <tr><th>Variável</th><th>Exemplo</th><th>Significado</th></tr>
+  <tr><td><code>SCRIPT</code></td><td><code>treino.py</code></td><td>Script a executar, relativo à raiz do projeto</td></tr>
+  <tr><td><code>PYTHON_BIN</code></td><td><code>venv/bin/python</code></td><td>Python usado. Normalmente é o venv do próprio projeto; são aceitos venvs de Python 3.9 a 3.12.</td></tr>
+  <tr><td><code>CORES</code></td><td><code>2</code></td><td>Quantidade de cores. O docker_lab escolhe quais cores livres usar.</td></tr>
+  <tr><td><code>MEMORY_GB</code></td><td><code>4</code></td><td>RAM máxima do job</td></tr>
+  <tr><td><code>GPU</code></td><td><code>none</code> ou <code>0</code></td><td>Não usar GPU (<code>none</code>) ou usar a GPU de índice 0, a primeira coluna do <code>nvidia-smi</code></td></tr>
+  <tr><td><code>GPU_MEMORY_GB</code></td><td><code>2</code></td><td>VRAM máxima (obrigatório com GPU)</td></tr>
+  <tr><td><code>JOB_NAME</code></td><td><code>{USERNAME}_treino</code></td><td>Nome do job. Mantenha o <code>{USERNAME}_</code>, que é trocado pelo seu usuário automaticamente.</td></tr>
+</table>
+<div class="note">Não sabe quanta VRAM o seu script usa? Rode uma vez e veja o pico: <code>torch.cuda.max_memory_allocated()</code> no PyTorch, ou <code>nvidia-smi</code> durante a execução.</div>
+
+<h3>Passo 2 — Executar com <code>docker-lab run</code></h3>
+<p>Abra o terminal do VS Code na pasta do projeto e rode <code>docker-lab run</code>. A validação e a reserva aparecem na tela, o job segue em segundo plano e o prompt volta na hora. Você pode fechar o VS Code ou desconectar, e o job continua rodando.</p>
+
+<figure>
+<div class="vsc">
+  <div class="title"><span class="dots"><span style="background:#ff5f57"></span><span style="background:#febc2e"></span><span style="background:#28c840"></span></span><span class="t">job.env — meu_projeto [SSH: ainetmachine] — Visual Studio Code</span></div>
+  <div class="body">
+    <div class="act"><i class="on"></i><i></i><i></i><i></i></div>
+    <div class="side">
+      <div class="h">EXPLORER</div>
+      <div class="sec">▾ MEU_PROJETO [SSH: AINETMACHINE]</div>
+      <div class="it"><span class="ic dir">›</span> dados</div>
+      <div class="it"><span class="ic dir">›</span> venv</div>
+      <div class="it sel"><span class="ic env">⚙</span> job.env</div>
+      <div class="it"><span class="ic py">◆</span> treino.py</div>
+      <div class="it"><span class="ic">≡</span> requirements.txt</div>
+    </div>
+    <div class="main">
+      <div class="tabs"><div class="tab on">⚙ job.env</div><div class="tab">◆ treino.py</div></div>
+      <div class="ed"><div class="ln">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8</div><div class="code"><span class="cm"># Job do meu experimento — ver /opt/docker_lab/job.env.example</span>
+<span class="k">SCRIPT</span>=<span class="v">treino.py</span>
+<span class="k">PYTHON_BIN</span>=<span class="v">venv/bin/python</span>
+<span class="k">CORES</span>=<span class="n">2</span>
+<span class="k">MEMORY_GB</span>=<span class="n">4</span>
+<span class="k">GPU</span>=<span class="n">0</span>
+<span class="k">GPU_MEMORY_GB</span>=<span class="n">2</span>
+<span class="k">JOB_NAME</span>=<span class="v">{USERNAME}_treino</span></div></div>
+      <div class="panel">
+        <div class="ptabs"><span>PROBLEMS</span><span>OUTPUT</span><span class="on">TERMINAL</span></div>
+<pre class="term"><span class="pu">aluno@ainetmachine</span>:<span class="pp">~/meu_projeto</span>$ docker-lab run
+== Buildando imagem (docker-lab-runner:latest) ==
+== Reservando recurso para 'aluno_treino' (cores=2 mem=4GB gpu=0 vram=2GB) ==
+== Reservado: cores do host = 0,1 ==
+== Rodando em segundo plano: /home/aluno/meu_projeto/venv/bin/python treino.py ==
+   Container: docker-lab-aluno_treino
+   Log:       /opt/docker_lab/logs/aluno_treino.log   (acompanhe com: tail -f "/opt/docker_lab/logs/aluno_treino.log")
+   Pra parar: docker-lab stop
+<span class="pu">aluno@ainetmachine</span>:<span class="pp">~/meu_projeto</span>$ </pre>
+      </div>
+    </div>
+  </div>
+  <div class="status"><span class="remote">&gt;&lt; SSH: ainetmachine</span><span>Ln 7, Col 16</span><span>Properties</span></div>
+</div>
+<figcaption>Figura 2 — <code>job.env</code> aberto no editor e o job disparado pelo terminal integrado. Com vários arquivos (por exemplo <code>job_1.env</code>, <code>job_2.env</code>), use <code>docker-lab run job_1.env</code>.</figcaption>
+</figure>
+
+<h3>Passo 3 — Acompanhar: <code>docker-lab status</code> e o log</h3>
+<p><code>docker-lab status</code> mostra o que cada recurso tem em uso, o que ainda pode ser reservado dentro do teto de 80% e quais jobs estão ativos. O andamento do script fica no log.</p>
+
+<figure>
+<div class="vsc">
+  <div class="title"><span class="dots"><span style="background:#ff5f57"></span><span style="background:#febc2e"></span><span style="background:#28c840"></span></span><span class="t">meu_projeto [SSH: ainetmachine] — Visual Studio Code</span></div>
+  <div class="body">
+    <div class="act"><i class="on"></i><i></i><i></i><i></i></div>
+    <div class="main">
+      <div class="panel" style="border-top:none">
+        <div class="ptabs"><span>PROBLEMS</span><span>OUTPUT</span><span class="on">TERMINAL</span></div>
+<pre class="term"><span class="pu">aluno@ainetmachine</span>:<span class="pp">~/meu_projeto</span>$ docker-lab status
+Cores: 6 em uso, 6 ainda reserváveis (teto 80% = 12 de 16 totais) — livres de verdade: [6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+Memória: 20GB em uso, 29GB ainda reserváveis (teto 80% = 49GB de 62GB totais)
+GPU 0 VRAM: 8GB em uso, 1GB ainda reserváveis (teto 80% = 9GB de 12GB totais)
+
+Jobs ativos:
+  aluno_treino: cores=[0, 1] mem=4GB gpu=0 vram=2GB
+  maria_bert: cores=[2, 3, 4, 5] mem=16GB gpu=0 vram=6GB
+<span class="pu">aluno@ainetmachine</span>:<span class="pp">~/meu_projeto</span>$ tail -f /opt/docker_lab/logs/aluno_treino.log
+Cores visíveis: [0, 1]
+época 1/3 concluída
+época 2/3 concluída
+<span class="dim">█</span></pre>
+      </div>
+    </div>
+  </div>
+  <div class="status"><span class="remote">&gt;&lt; SSH: ainetmachine</span><span>bash</span></div>
+</div>
+<figcaption>Figura 3 — Dois alunos dividindo a mesma GPU (TITAN V, 12 GB): cada um tem a sua fatia de VRAM, e a soma respeita o teto de 9 GB. O <code>Ctrl+C</code> sai do <code>tail</code> sem parar o job.</figcaption>
+</figure>
+
+<h3>Passo 4 — Parar um job e ver o histórico</h3>
+<p><code>docker-lab stop</code> lista os jobs ativos num menu numerado. Parar um job <b>encerra</b> a execução, que não pode ser retomada depois. A reserva é liberada sozinha. <code>docker-lab history</code> mostra todas as execuções com início, fim e status: <code>executando</code>, <code>executou</code>, <code>erro</code> ou <code>interrompido</code>.</p>
+
+<figure>
+<div class="vsc">
+  <div class="title"><span class="dots"><span style="background:#ff5f57"></span><span style="background:#febc2e"></span><span style="background:#28c840"></span></span><span class="t">meu_projeto [SSH: ainetmachine] — Visual Studio Code</span></div>
+  <div class="body">
+    <div class="act"><i class="on"></i><i></i><i></i><i></i></div>
+    <div class="main">
+      <div class="panel" style="border-top:none">
+        <div class="ptabs"><span>PROBLEMS</span><span>OUTPUT</span><span class="on">TERMINAL</span></div>
+<pre class="term nowrap"><span class="pu">aluno@ainetmachine</span>:<span class="pp">~/meu_projeto</span>$ docker-lab stop
+Jobs ativos:
+1) aluno_treino (cores=[0, 1] mem=4GB gpu=0 vram=2GB)
+2) maria_bert (cores=[2, 3, 4, 5] mem=16GB gpu=0 vram=6GB)
+3) Cancelar
+Qual você quer parar (número, ou 'Cancelar')? 1
+Parando 'docker-lab-aluno_treino'...
+docker-lab-aluno_treino
+Parado. A reserva é liberada sozinha em alguns instantes (o run.sh cuida disso).
+<span class="pu">aluno@ainetmachine</span>:<span class="pp">~/meu_projeto</span>$ docker-lab history
+JOB_NAME                                 USUARIO          INICIO               FIM                  STATUS
+------------------------------------------------------------------------------------------------------------------
+aluno_teste_cpu                          aluno            2026-09-28T09:12:40  2026-09-28T09:13:41  executou
+maria_bert                               maria            2026-09-28T10:02:11  -                    executando
+aluno_treino                             aluno            2026-09-28T10:30:05  2026-09-28T10:41:52  interrompido</pre>
+      </div>
+    </div>
+  </div>
+  <div class="status"><span class="remote">&gt;&lt; SSH: ainetmachine</span><span>bash</span></div>
+</div>
+<figcaption>Figura 4 — Parando um job pelo menu e conferindo o histórico. Qualquer usuário pode parar qualquer job, se precisar.</figcaption>
+</figure>
+
+<h2>4. O que o docker_lab impede</h2>
+
+<h3>Rodar Python direto, fora do container</h3>
+<p>Com o bloqueio ativo, <code>python3 script.py</code> no terminal mostra instruções em vez de executar, inclusive com o venv ativado. A sessão do terminal continua normal.</p>
+<figure>
+<div class="vsc">
+  <div class="title"><span class="dots"><span style="background:#ff5f57"></span><span style="background:#febc2e"></span><span style="background:#28c840"></span></span><span class="t">treino.py — meu_projeto [SSH: ainetmachine] — Visual Studio Code</span></div>
+  <div class="body">
+    <div class="act"><i class="on"></i><i></i><i></i><i></i></div>
+    <div class="side">
+      <div class="h">EXPLORER</div>
+      <div class="sec">▾ MEU_PROJETO [SSH: AINETMACHINE]</div>
+      <div class="it"><span class="ic dir">›</span> dados</div>
+      <div class="it"><span class="ic dir">›</span> venv</div>
+      <div class="it"><span class="ic env">⚙</span> job.env</div>
+      <div class="it sel"><span class="ic py">◆</span> treino.py</div>
+      <div class="it"><span class="ic">≡</span> requirements.txt</div>
+    </div>
+    <div class="main">
+      <div class="tabs"><div class="tab">⚙ job.env</div><div class="tab on">◆ treino.py</div></div>
+      <div class="ed"><div class="ln">1<br>2<br>3<br>4</div><div class="code"><span class="kw">import</span> <span class="bi">torch</span>
+<span class="kw">from</span> <span class="bi">modelo</span> <span class="kw">import</span> <span class="fn">treinar</span>
+
+<span class="fn">treinar</span>(epocas=<span class="n">3</span>, device=<span class="v">"cuda"</span>)</div></div>
+      <div class="panel">
+        <div class="ptabs"><span>PROBLEMS</span><span>OUTPUT</span><span class="on">TERMINAL</span></div>
+<pre class="term"><span class="dim">(venv)</span> <span class="pu">aluno@ainetmachine</span>:<span class="pp">~/meu_projeto</span>$ python3 treino.py
+<span class="y">[docker_lab] Execução direta de Python bloqueada nesta máquina.</span>
+
+Scripts Python devem rodar DENTRO de um container gerenciado pelo docker_lab, que
+garante limite de CPU/RAM/GPU e evita travar a máquina pros outros usuários.
+
+Como rodar:
+  1. Copie o exemplo pra raiz do SEU projeto (o job.env sempre fica lá):
+     cp /opt/docker_lab/job.env.example &lt;raiz-do-seu-projeto&gt;/job.env
+  2. Edite job.env (SCRIPT, PYTHON_BIN, CORES, MEMORY_GB, GPU, GPU_MEMORY_GB, JOB_NAME).
+  3. Na raiz do seu projeto, rode:
+     docker-lab run
+
+Mais detalhes: /opt/docker_lab/README.md
+Projeto no GitHub: https://github.com/lucas-mendonca-andrade/docker_lab
+<span class="dim">(venv)</span> <span class="pu">aluno@ainetmachine</span>:<span class="pp">~/meu_projeto</span>$ </pre>
+      </div>
+    </div>
+  </div>
+  <div class="status"><span class="remote">&gt;&lt; SSH: ainetmachine</span><span>Python 3.11.9 ('venv')</span></div>
+</div>
+<figcaption>Figura 5 — Tentativa de rodar o script direto, mesmo com o venv ativado: aparece o aviso com o caminho correto.</figcaption>
+</figure>
+<div class="note warn">O bloqueio é uma <b>barreira contra esquecimento</b>, não uma trava de segurança. Caminhos absolutos (<code>/usr/bin/python3.11 x.py</code>), <code>./script.py</code> e scripts <code>.sh</code> não interativos passam sem aviso. Use sempre o <code>docker-lab run</code>.</div>
+
+<h3>Passar do teto de 80%</h3>
+<p>Se o pedido de um job, somado ao que já está reservado, passar do teto de qualquer recurso, a execução é recusada na hora, com a explicação do motivo. Nada entra em fila: espere algum job terminar, ou peça menos recurso.</p>
+<figure>
+<div class="vsc">
+  <div class="title"><span class="dots"><span style="background:#ff5f57"></span><span style="background:#febc2e"></span><span style="background:#28c840"></span></span><span class="t">meu_projeto [SSH: ainetmachine] — Visual Studio Code</span></div>
+  <div class="body">
+    <div class="act"><i class="on"></i><i></i><i></i><i></i></div>
+    <div class="main">
+      <div class="panel" style="border-top:none">
+        <div class="ptabs"><span>PROBLEMS</span><span>OUTPUT</span><span class="on">TERMINAL</span></div>
+<pre class="term"><span class="pu">aluno@ainetmachine</span>:<span class="pp">~/meu_projeto</span>$ docker-lab run job_grande.env
+== Buildando imagem (docker-lab-runner:latest) ==
+== Reservando recurso para 'aluno_treino_grande' (cores=2 mem=8GB gpu=0 vram=4GB) ==
+<span class="r">Pedido de 4GB de VRAM na GPU 0 ultrapassaria o teto de 80%: já 8GB em uso, limite é 9GB de 12GB totais.</span>
+<span class="r">== Não foi possível reservar recurso — veja a mensagem acima. Rode docker-lab status para ver o que está em uso. ==</span>
+<span class="pu">aluno@ainetmachine</span>:<span class="pp">~/meu_projeto</span>$ </pre>
+      </div>
+    </div>
+  </div>
+  <div class="status"><span class="remote">&gt;&lt; SSH: ainetmachine</span><span>bash</span></div>
+</div>
+<figcaption>Figura 6 — Pedido de VRAM recusado: a GPU já tem 8 GB reservados, e o teto é 9 GB.</figcaption>
+</figure>
+
+<h3>Passar do limite do próprio job</h3>
+<table>
+  <tr><th>Situação</th><th>O que acontece</th><th>O que fazer</th></tr>
+  <tr><td>O script usa mais RAM que <code>MEMORY_GB</code></td><td>O container é encerrado. O histórico mostra <code>erro</code>.</td><td>Aumentar <code>MEMORY_GB</code></td></tr>
+  <tr><td>O script usa mais VRAM que <code>GPU_MEMORY_GB</code></td><td>O script recebe <code>CUDA out of memory</code>, e só esse job é afetado.</td><td>Aumentar <code>GPU_MEMORY_GB</code> ou reduzir o batch size</td></tr>
+  <tr><td>O script pede mais cores (ex. <code>n_jobs=-1</code>)</td><td>Ele só enxerga os cores reservados e roda com eles.</td><td>Nada: é o esperado</td></tr>
+  <tr><td><code>JOB_NAME</code> já em uso por um job ativo</td><td>A execução é recusada.</td><td>Usar outro nome no <code>job.env</code></td></tr>
+</table>
+
+<h2>5. Resumo dos comandos</h2>
+<div class="grid2">
+  <div class="card"><b>Administrador (uma vez)</b>
+<pre class="cmd" style="margin:4px 0 0">sudo git clone https://github.com/lucas-mendonca-andrade/docker_lab.git /opt/docker_lab
+sudo /opt/docker_lab/setup.sh
+<span class="c"># desfazer tudo:</span>
+sudo /opt/docker_lab/undo.sh</pre></div>
+  <div class="card"><b>Aluno (na raiz do projeto)</b>
+<pre class="cmd" style="margin:4px 0 0">cp /opt/docker_lab/job.env.example job.env
+docker-lab run            <span class="c"># ou: docker-lab run outro.env</span>
+docker-lab status
+docker-lab stop
+docker-lab history</pre></div>
+</div>
+<p style="margin-top:14px;font-size:9pt;color:var(--muted)">Código-fonte, README e atualizações: <a href="https://github.com/lucas-mendonca-andrade/docker_lab">https://github.com/lucas-mendonca-andrade/docker_lab</a></p>
+
+</body>
+</html>
