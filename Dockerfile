@@ -4,7 +4,8 @@
 # framework, que ja existem no repo montado no MESMO caminho absoluto do host —
 # ver run.sh, nao em /workspace).
 #
-# Ubuntu 24.04 (mesma distro da maquina do laboratorio) + deadsnakes: cada aluno pode
+# Ubuntu 24.04 + deadsnakes (a maquina do laboratorio e Ubuntu 20.04, mas a distro da
+# imagem nao precisa bater — so os Pythons em /usr/bin, ver abaixo): cada aluno pode
 # ter um venv proprio (PYTHON_BIN no job.env) criado com uma versao diferente de
 # Python — um venv guarda um link simbolico ABSOLUTO pro python do SISTEMA de quem o
 # criou (ex. /usr/bin/python3.11), que precisa existir de verdade dentro do container
@@ -36,19 +37,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         procps \
     && add-apt-repository -y ppa:deadsnakes/ppa \
     && apt-get update && apt-get install -y --no-install-recommends \
+        python3.7  python3.7-venv \
+        python3.8  python3.8-venv \
         python3.9  python3.9-venv \
         python3.10 python3.10-venv \
         python3.11 python3.11-venv \
         python3.12 python3.12-venv \
+        python3.13 python3.13-venv \
+        python3.14 python3.14-venv \
     && rm -rf /var/lib/apt/lists/*
-# Versoes cobertas: 3.9-3.12. Se algum aluno precisar de outra, adicione aqui
+# Versoes cobertas: 3.7-3.14 (todas as estaveis que o deadsnakes oferece pro 24.04;
+# 3.6 e anteriores nao existem mais la). Se algum aluno precisar de outra, adicione aqui
 # (python3.X python3.X-venv) e rebuilde — nao precisa mudar mais nada.
 
-# python3/pip3 genericos da imagem — usados so pelo fallback PYTHON_BIN=python3 (quem
-# NAO estiver usando um venv proprio, ver requirements.txt deste diretorio). Cada venv
-# de aluno usa a versao dele mesmo (instalada acima), nao esta.
-RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1 \
-    && curl -sS https://bootstrap.pypa.io/get-pip.py | python3.12 - --break-system-packages
+# pip do Python 3.12 da imagem — usado so pelo fallback PYTHON_BIN=python3 (quem NAO
+# estiver usando um venv proprio; o run.sh troca esse "python3" por "python3.12", ver
+# requirements.txt deste diretorio). Cada venv de aluno usa a versao dele mesmo.
+RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3.12 - --break-system-packages
 # --break-system-packages: seguro aqui porque esta imagem NAO e um sistema real (nao
 # tem gerenciador de pacotes do sistema tentando controlar essas libs) — o aviso do
 # Ubuntu 24.04 (PEP 668) e pensado pra proteger uma instalacao de SO de verdade, que
@@ -75,4 +80,11 @@ RUN mkdir -p /tmp/vgpulock && chmod 1777 /tmp/vgpulock
 # Dependencias extras que o SEU script precise (fora do que ja vem no venv do repo,
 # se voce for usar um). Vazio por padrao — cada aluno mantem o proprio requirements.txt.
 COPY requirements.txt /tmp/requirements.txt
-RUN python3 -m pip install --no-cache-dir --break-system-packages -r /tmp/requirements.txt
+RUN python3.12 -m pip install --no-cache-dir --break-system-packages -r /tmp/requirements.txt
+
+# /usr/bin/python3 da imagem = MESMA versao do /usr/bin/python3 do host (run.sh passa
+# HOST_PYTHON3_VERSION): um venv criado no host com 'python3 -m venv' aponta pra
+# /usr/bin/python3, e as libs dele (lib/python3.X) so funcionam se a versao bater. Ex.:
+# Ubuntu 20.04 do laboratorio -> 3.8. Por ultimo, pra so esta camada mudar com o ARG.
+ARG HOST_PYTHON3_VERSION=3.12
+RUN ln -sf "python${HOST_PYTHON3_VERSION}" /usr/bin/python3 && python3 --version

@@ -102,7 +102,7 @@ GENERATED="$GUARD_DIR/python-blocker.sh"
 sed "s|__REPO_ROOT__|$HERE|g" "$GUARD_DIR/python-blocker.sh.template" > "$GENERATED"
 chmod +x "$GENERATED"
 INSTALLED=()
-for name in python python3 python3.9 python3.10 python3.11 python3.12; do
+for name in python python3 python3.7 python3.8 python3.9 python3.10 python3.11 python3.12 python3.13 python3.14; do
     target="/usr/local/bin/$name"
     if [[ -e "$target" && ! -L "$target" ]]; then
         echo "AVISO: '$target' já existe e não é um symlink — pulando, não sobrescrevo às cegas." >&2

@@ -28,7 +28,7 @@ POWER_SERVICE="/etc/systemd/system/docker_lab-gpu-power-limit.service"
 
 echo "== 1/4 Removendo bloqueio de Python direto =="
 REMOVED=()
-for name in python python3 python3.9 python3.10 python3.11 python3.12; do
+for name in python python3 python3.7 python3.8 python3.9 python3.10 python3.11 python3.12 python3.13 python3.14; do
     target="/usr/local/bin/$name"
     if [[ -L "$target" ]] && [[ "$(readlink -f "$target")" == "$(readlink -f "$GENERATED" 2>/dev/null || echo "$GENERATED")" ]]; then
         rm -f "$target"

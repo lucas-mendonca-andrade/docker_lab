@@ -32,7 +32,11 @@ EOF
 }
 python() { _docker_lab_python_blocked; }
 python3() { _docker_lab_python_blocked; }
+python3.7() { _docker_lab_python_blocked; }
+python3.8() { _docker_lab_python_blocked; }
 python3.9() { _docker_lab_python_blocked; }
 python3.10() { _docker_lab_python_blocked; }
 python3.11() { _docker_lab_python_blocked; }
 python3.12() { _docker_lab_python_blocked; }
+python3.13() { _docker_lab_python_blocked; }
+python3.14() { _docker_lab_python_blocked; }

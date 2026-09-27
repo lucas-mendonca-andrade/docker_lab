@@ -104,12 +104,21 @@ if [[ "$PYTHON_BIN" == /* ]]; then
     CONTAINER_PYTHON_BIN="$PYTHON_BIN"
 elif [[ "$PYTHON_BIN" == */* ]]; then
     CONTAINER_PYTHON_BIN="$REPO_ROOT/$PYTHON_BIN"
+elif [[ "$PYTHON_BIN" == "python3" ]]; then
+    # Fallback sem venv: o requirements.txt deste diretorio e instalado no 3.12 da
+    # imagem (o /usr/bin/python3 dela segue a versao do host, ver Dockerfile).
+    CONTAINER_PYTHON_BIN="python3.12"
 else
     CONTAINER_PYTHON_BIN="$PYTHON_BIN"
 fi
 
+# Versao do /usr/bin/python3 do host (ex. 3.8 no Ubuntu 20.04) — a imagem aponta o
+# /usr/bin/python3 dela pra mesma versao, senao venvs criados com 'python3 -m venv'
+# quebram dentro do container (ver Dockerfile).
+HOST_PYTHON3_VERSION="$(readlink -f /usr/bin/python3 | grep -oE '3\.[0-9]+$' || echo 3.12)"
+
 echo "== Buildando imagem ($IMAGE) =="
-docker build -q -t "$IMAGE" "$HERE" >/dev/null
+docker build -q --build-arg "HOST_PYTHON3_VERSION=$HOST_PYTHON3_VERSION" -t "$IMAGE" "$HERE" >/dev/null
 
 GPU_DESC="gpu=$GPU"
 if [[ "$GPU" != "none" ]]; then
