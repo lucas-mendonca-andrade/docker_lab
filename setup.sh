@@ -4,7 +4,7 @@
 # rodado de novo sem problema (ex. depois de um git pull) — cada passo é idempotente.
 # Desfazer tudo: sudo ./undo.sh
 #
-# Faz 4 coisas:
+# Faz 5 coisas:
 #
 # 1. INSTALAÇÃO COMPARTILHADA: libera state/ e logs/ pra QUALQUER usuário Unix da
 #    máquina (chmod 777) — todos precisam gravar no MESMO state/reservations.json, senão
@@ -33,6 +33,13 @@
 #    (/usr/bin/python3.9 x.py), './script.py' com qualquer shebang e shells
 #    não-interativas (cron, .sh chamando python) passam. Não afeta o próprio docker_lab
 #    (usa HOST_PYTHON com caminho fixo) nem Python dentro dos containers.
+#
+# 5. ACESSO AO DOCKER: coloca todo usuário humano da máquina (UID >= 1000, com shell de
+#    login) no grupo 'docker' — sem isso o 'docker-lab run' falha com "permission
+#    denied ... docker.sock" (lib/sync_docker_group.sh). Vale também pros usuários
+#    criados DEPOIS: um .path do systemd observa /etc/passwd e roda o mesmo script a
+#    cada usuário novo. Atenção: o grupo docker equivale a root na máquina, aceitável
+#    aqui pelo mesmo motivo do item 1 (só contas confiáveis).
 set -euo pipefail
 
 if [[ "$(id -u)" -ne 0 ]]; then
@@ -48,8 +55,10 @@ PROFILE_D_FILE="/etc/profile.d/99-docker_lab-python-guard.sh"
 BASHRC_MARKER_BEGIN="# >>> docker_lab python guard >>>"
 BASHRC_MARKER_END="# <<< docker_lab python guard <<<"
 POWER_SERVICE="/etc/systemd/system/docker_lab-gpu-power-limit.service"
+DOCKER_GROUP_SERVICE="/etc/systemd/system/docker_lab-docker-group.service"
+DOCKER_GROUP_PATH="/etc/systemd/system/docker_lab-docker-group.path"
 
-echo "== 1/4 Instalação compartilhada: liberando state/ e logs/ pra todos os usuários =="
+echo "== 1/5 Instalação compartilhada: liberando state/ e logs/ pra todos os usuários =="
 mkdir -p "$STATE_DIR" "$LOGS_DIR"
 touch "$STATE_DIR/reservations.lock" "$STATE_DIR/history.lock"
 # 777 SEM sticky bit: reservations.json/history.json são reescritos via arquivo
@@ -62,7 +71,7 @@ chmod 666 "$STATE_DIR/reservations.lock" "$STATE_DIR/history.lock"
 echo "OK"
 
 echo
-echo "== 2/4 Limite de potência da GPU (80%) =="
+echo "== 2/5 Limite de potência da GPU (80%) =="
 chmod +x "$HERE/lib/gpu_power_limit.sh"
 if command -v nvidia-smi >/dev/null 2>&1; then
     cat > "$POWER_SERVICE" <<EOF
@@ -87,7 +96,7 @@ else
 fi
 
 echo
-echo "== 3/4 Comando docker-lab =="
+echo "== 3/5 Comando docker-lab =="
 chmod +x "$HERE/bin/docker-lab"
 if [[ -e /usr/local/bin/docker-lab && ! -L /usr/local/bin/docker-lab ]]; then
     echo "AVISO: /usr/local/bin/docker-lab já existe e não é um symlink — pulando." >&2
@@ -97,7 +106,7 @@ else
 fi
 
 echo
-echo "== 4/4 Bloqueio de Python direto no host =="
+echo "== 4/5 Bloqueio de Python direto no host =="
 GENERATED="$GUARD_DIR/python-blocker.sh"
 sed "s|__REPO_ROOT__|$HERE|g" "$GUARD_DIR/python-blocker.sh.template" > "$GENERATED"
 chmod +x "$GENERATED"
@@ -123,6 +132,36 @@ if ! grep -qF "$BASHRC_MARKER_BEGIN" /etc/bash.bashrc 2>/dev/null; then
     } >> /etc/bash.bashrc
 fi
 echo "Função de shell: $PROFILE_D_FILE (referenciada em /etc/bash.bashrc)"
+
+echo
+echo "== 5/5 Acesso ao Docker para todos os usuários (atuais e futuros) =="
+chmod +x "$HERE/lib/sync_docker_group.sh"
+"$HERE/lib/sync_docker_group.sh"
+# Usuários criados DEPOIS: o .path observa /etc/passwd e dispara o .service, que roda o
+# mesmo script — o usuário novo já está no grupo antes do primeiro login.
+cat > "$DOCKER_GROUP_SERVICE" <<EOF
+[Unit]
+Description=docker_lab: coloca usuarios da maquina no grupo docker
+
+[Service]
+Type=oneshot
+ExecStart=$HERE/lib/sync_docker_group.sh
+EOF
+cat > "$DOCKER_GROUP_PATH" <<EOF
+[Unit]
+Description=docker_lab: observa /etc/passwd pra colocar usuarios novos no grupo docker
+
+[Path]
+PathChanged=/etc/passwd
+Unit=docker_lab-docker-group.service
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable --now docker_lab-docker-group.path >/dev/null 2>&1
+echo "Serviço $DOCKER_GROUP_PATH ativo (usuários novos entram no grupo sozinhos)."
+echo "Quem foi adicionado agora precisa reconectar o SSH pra valer."
 
 echo
 echo "== Pronto =="

@@ -117,6 +117,20 @@ fi
 # quebram dentro do container (ver Dockerfile).
 HOST_PYTHON3_VERSION="$(readlink -f /usr/bin/python3 | grep -oE '3\.[0-9]+$' || echo 3.12)"
 
+# Sem acesso ao Docker (usuario fora do grupo docker), o build falharia com um
+# "permission denied ... docker.sock" pouco claro — explica o que fazer.
+if ! docker version >/dev/null 2>&1; then
+    if getent group docker | cut -d: -f4 | tr ',' '\n' | grep -qx "$REAL_USER"; then
+        echo "Seu usuário ($REAL_USER) já está no grupo docker, mas esta sessão é anterior a isso." >&2
+        echo "Saia e conecte de novo por SSH (ou rode 'newgrp docker') e tente outra vez." >&2
+    else
+        echo "Seu usuário ($REAL_USER) não tem acesso ao Docker (não está no grupo docker)." >&2
+        echo "Peça ao administrador da máquina para rodar:  sudo $HERE/setup.sh" >&2
+        echo "(ou: sudo usermod -aG docker $REAL_USER) e depois reconecte o SSH." >&2
+    fi
+    exit 1
+fi
+
 echo "== Buildando imagem ($IMAGE) =="
 # Saida do build so aparece se falhar — senao avisos inofensivos (ex. "legacy builder
 # is deprecated" do Docker do Ubuntu 20.04, sem buildx) poluiriam todo 'docker-lab run'.

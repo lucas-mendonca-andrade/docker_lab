@@ -5,9 +5,12 @@
 # 2. Limite de potência da GPU (volta ao padrão de fábrica e remove o serviço systemd).
 #    O modo persistente (nvidia-smi -pm 1) fica ligado — é inofensivo.
 # 3. O comando /usr/local/bin/docker-lab (se for o nosso symlink).
-# 4. Permissões compartilhadas de state/ e logs/ (voltam a 755/644, só o dono grava —
+# 4. O serviço que coloca usuários NOVOS no grupo docker (quem já está continua).
+# 5. Permissões compartilhadas de state/ e logs/ (voltam a 755/644, só o dono grava —
 #    outros usuários deixam de conseguir rodar jobs).
-# Não apaga state/ nem logs/ (histórico e logs continuam lá).
+# Não apaga state/ nem logs/ (histórico e logs continuam lá). NÃO tira ninguém do grupo
+# docker (o setup.sh adiciona) — alguém podia já estar lá por outro motivo; se quiser,
+# remova à mão com 'gpasswd -d <usuario> docker'.
 #
 # Uso: sudo ./undo.sh
 set -euo pipefail
@@ -25,8 +28,10 @@ PROFILE_D_FILE="/etc/profile.d/99-docker_lab-python-guard.sh"
 BASHRC_MARKER_BEGIN="# >>> docker_lab python guard >>>"
 BASHRC_MARKER_END="# <<< docker_lab python guard <<<"
 POWER_SERVICE="/etc/systemd/system/docker_lab-gpu-power-limit.service"
+DOCKER_GROUP_SERVICE="/etc/systemd/system/docker_lab-docker-group.service"
+DOCKER_GROUP_PATH="/etc/systemd/system/docker_lab-docker-group.path"
 
-echo "== 1/4 Removendo bloqueio de Python direto =="
+echo "== 1/5 Removendo bloqueio de Python direto =="
 REMOVED=()
 for name in python python3 python3.7 python3.8 python3.9 python3.10 python3.11 python3.12 python3.13 python3.14; do
     target="/usr/local/bin/$name"
@@ -43,7 +48,7 @@ fi
 echo "Função de shell removida (sessões já abertas mantêm até serem reabertas)."
 
 echo
-echo "== 2/4 Removendo limite de potência da GPU =="
+echo "== 2/5 Removendo limite de potência da GPU =="
 if [[ -f "$POWER_SERVICE" ]]; then
     systemctl disable docker_lab-gpu-power-limit.service >/dev/null 2>&1 || true
     rm -f "$POWER_SERVICE"
@@ -53,14 +58,23 @@ fi
 bash "$HERE/lib/gpu_power_limit.sh" reset
 
 echo
-echo "== 3/4 Removendo comando docker-lab =="
+echo "== 3/5 Removendo comando docker-lab =="
 if [[ -L /usr/local/bin/docker-lab && "$(readlink -f /usr/local/bin/docker-lab)" == "$HERE/bin/docker-lab" ]]; then
     rm -f /usr/local/bin/docker-lab
     echo "Removido: /usr/local/bin/docker-lab"
 fi
 
 echo
-echo "== 4/4 Removendo permissões compartilhadas de state/ e logs/ =="
+echo "== 4/5 Removendo inclusão automática no grupo docker =="
+if [[ -f "$DOCKER_GROUP_PATH" ]]; then
+    systemctl disable --now docker_lab-docker-group.path >/dev/null 2>&1 || true
+    rm -f "$DOCKER_GROUP_PATH" "$DOCKER_GROUP_SERVICE"
+    systemctl daemon-reload
+    echo "Serviço removido (quem já está no grupo docker continua)."
+fi
+
+echo
+echo "== 5/5 Removendo permissões compartilhadas de state/ e logs/ =="
 [[ -d "$STATE_DIR" ]] && chmod 755 "$STATE_DIR" && find "$STATE_DIR" -maxdepth 1 -type f -exec chmod 644 {} +
 [[ -d "$LOGS_DIR" ]] && chmod 755 "$LOGS_DIR"
 echo "OK"
