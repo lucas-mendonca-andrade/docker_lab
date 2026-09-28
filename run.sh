@@ -196,6 +196,13 @@ fi
 # /usr/bin/pythonX) — so resolve se o container enxergar o repo nesse EXATO mesmo
 # caminho. Testado e confirmado.
 #
+# Roda como o USUARIO de quem chamou (--user uid:gid), nao como root: arquivos que o
+# script criar no projeto ficam com o dono certo — o aluno consegue apagar/editar os
+# proprios resultados sem sudo (poucos usuarios da maquina tem sudo). /etc/passwd e
+# /etc/group do host entram read-only pra bibliotecas que consultam o nome do usuario
+# (pwd.getpwuid) nao quebrarem; HOME=/tmp porque a home real nao existe no container e
+# varias libs gravam cache em ~/.cache.
+#
 # Sem -i/-t (nunca aloca terminal) e stdin explicitamente vindo de /dev/null: se algum
 # setup.sh de framework tentar fazer uma pergunta interativa (ex. "confirma? [y/N]"),
 # ele recebe EOF na hora em vez de ficar esperando um terminal que nunca vai responder —
@@ -218,6 +225,10 @@ docker run --rm \\
     --cpuset-cpus="$ALLOC_CORES" \\
     --memory="${MEMORY_GB}g" \\
     --memory-swap="${MEMORY_GB}g" \\
+    --user "$(id -u):$(id -g)" \\
+    -e HOME=/tmp -e USER="$REAL_USER" -e LOGNAME="$REAL_USER" \\
+    -v /etc/passwd:/etc/passwd:ro \\
+    -v /etc/group:/etc/group:ro \\
     ${GPU_ARGS[@]+"${GPU_ARGS[@]}"} \\
     -v "$REPO_ROOT":"$REPO_ROOT" \\
     -w "$REPO_ROOT" \\

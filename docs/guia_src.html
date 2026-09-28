@@ -262,6 +262,8 @@ Cores visíveis: [0, 1]
 <figcaption>Figura 3 — Dois alunos dividindo a mesma GPU (TITAN V, 12 GB): cada um tem a sua fatia de VRAM, e a soma respeita o teto de 9 GB. O <code>Ctrl+C</code> sai do <code>tail</code> sem parar o job.</figcaption>
 </figure>
 
+<div class="note ok">O job roda com o <b>seu usuário</b>: tudo o que o script gravar no projeto (resultados, modelos, logs) é seu, e você pode apagar ou editar sem <code>sudo</code>. Só instalar e desinstalar o docker_lab exige <code>sudo</code>.</div>
+
 <h3>Passo 4 — Parar um job e ver o histórico</h3>
 <p><code>docker-lab stop</code> lista os jobs ativos num menu numerado. Parar um job <b>encerra</b> a execução, que não pode ser retomada depois. A reserva é liberada sozinha. <code>docker-lab history</code> mostra todas as execuções com início, fim e status: <code>executando</code>, <code>executou</code>, <code>erro</code> ou <code>interrompido</code>.</p>
 
@@ -392,7 +394,8 @@ sudo /opt/docker_lab/undo.sh</pre></div>
 docker-lab run            <span class="c"># ou: docker-lab run outro.env</span>
 docker-lab status
 docker-lab stop
-docker-lab history</pre></div>
+docker-lab history
+docker-lab corrigir-permissoes  <span class="c"># arquivos antigos com dono root</span></pre></div>
 </div>
 <p style="margin-top:14px;font-size:9pt;color:var(--muted)">Código-fonte, README e atualizações: <a href="https://github.com/lucas-mendonca-andrade/docker_lab">https://github.com/lucas-mendonca-andrade/docker_lab</a></p>
 

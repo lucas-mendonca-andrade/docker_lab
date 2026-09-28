@@ -57,3 +57,7 @@ docker-lab status     # recursos em uso e livres
 docker-lab stop       # para um job ativo (menu)
 docker-lab history    # histórico de execuções
 ```
+
+O job roda com o **seu usuário**: tudo o que ele gravar no projeto é seu, sem precisar
+de `sudo`. Se sobraram arquivos com dono `root` de execuções antigas, rode
+`docker-lab corrigir-permissoes` na pasta do projeto.
