@@ -30,11 +30,26 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # software-properties-common: add-apt-repository, pra registrar o PPA deadsnakes.
 # procps: nproc/ps, uteis pra debugar dentro do container.
+# libgomp1: runtime do OpenMP (libgomp.so.1) — dependencia de baixo nivel de
+# numpy/scikit-learn/lightgbm/xgboost/etc, usada por VARIOS frameworks deste projeto.
+# Faltava aqui (a imagem base minima do Ubuntu nao inclui) — achado num erro real
+# (2026-09-29): 'OSError: libgomp.so.1: cannot open shared object file' quebrando o
+# setup.sh do mljarsupervised dentro do container (funcionava fora, bare metal, porque
+# a maquina host ja tinha a lib instalada por outro motivo).
+# wget + build-essential: o setup.sh do MLNet usa 'wget' (baixar dotnet-install.sh e
+# compilar OpenSSL do zero) e 'make'/'gcc' (compilar OpenSSL) — nenhum dos dois vinha
+# nesta imagem minima (so tinha 'curl'). Achado num erro real (2026-09-29): setup.sh do
+# MLNet falhava silenciosamente ('wget: not found', sem set -e no script pra travar na
+# hora) deixando 'dotnet'/'mlnet' pela metade — o job "terminava com sucesso" (a AMLB
+# nao propaga esse erro como exit code != 0) mas sem instalar nada de verdade.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         software-properties-common \
         gnupg \
         curl \
+        wget \
+        build-essential \
         procps \
+        libgomp1 \
     && add-apt-repository -y ppa:deadsnakes/ppa \
     && apt-get update && apt-get install -y --no-install-recommends \
         python3.7  python3.7-venv \

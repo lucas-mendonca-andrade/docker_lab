@@ -214,6 +214,22 @@ if [[ "$GPU" != "none" ]]; then
     )
 fi
 
+# Monta a HOME REAL do usuario (mesmo padrao ja usado pro REPO_ROOT: mesmo caminho
+# absoluto dentro e fora do container) — nao so o REPO_ROOT. Sem isso, qualquer '~/algo'
+# no codigo de um projeto (ex. dataset externo guardado fora do repo) resolveria pra
+# dentro do container sem nada montado ali, e bibliotecas que gravam cache em ~/.cache
+# (pip, matplotlib, etc.) quebrariam por essa pasta nao existir. Generico: nao exige
+# nenhuma config no job.env, nao importa qual projeto/script esteja rodando.
+#
+# Isso NAO abre acesso a mais nada do que o usuario ja tem fora do container: o processo
+# roda com o UID real dele (--user uid:gid, ver abaixo), entao ja teria exatamente esse
+# mesmo acesso aos proprios arquivos rodando o script direto no host, sem Docker nenhum.
+# Read-write (nao :ro) de proposito, pelo motivo do ~/.cache acima.
+#
+# HOME aqui e a home REAL (nao mais forcada pra /tmp) — com a home de verdade montada,
+# nao ha mais motivo pra forcar outro valor.
+HOME_MOUNT_ARGS=(-v "$HOME":"$HOME")
+
 # O container em si roda num script gerado aqui (nao direto neste processo), pra poder
 # ser disparado com nohup e sobreviver ao ./run.sh terminar/ao terminal fechar. Esse
 # script e quem libera a reserva (trap EXIT), quando o container terminar por qualquer
@@ -229,8 +245,8 @@ fi
 # script criar no projeto ficam com o dono certo — o aluno consegue apagar/editar os
 # proprios resultados sem sudo (poucos usuarios da maquina tem sudo). /etc/passwd e
 # /etc/group do host entram read-only pra bibliotecas que consultam o nome do usuario
-# (pwd.getpwuid) nao quebrarem; HOME=/tmp porque a home real nao existe no container e
-# varias libs gravam cache em ~/.cache.
+# (pwd.getpwuid) nao quebrarem; HOME aponta pra home REAL (montada acima, ver
+# HOME_MOUNT_ARGS) — nao precisa mais forcar /tmp.
 #
 # Sem -i/-t (nunca aloca terminal) e stdin explicitamente vindo de /dev/null: se algum
 # setup.sh de framework tentar fazer uma pergunta interativa (ex. "confirma? [y/N]"),
@@ -255,11 +271,12 @@ docker run --rm \\
     --memory="${MEMORY_GB}g" \\
     --memory-swap="${MEMORY_GB}g" \\
     --user "$(id -u):$(id -g)" \\
-    -e HOME=/tmp -e USER="$REAL_USER" -e LOGNAME="$REAL_USER" \\
+    -e HOME="$HOME" -e USER="$REAL_USER" -e LOGNAME="$REAL_USER" \\
     -v /etc/passwd:/etc/passwd:ro \\
     -v /etc/group:/etc/group:ro \\
     ${GPU_ARGS[@]+"${GPU_ARGS[@]}"} \\
     ${PYTHON_MOUNT_ARGS[@]+"${PYTHON_MOUNT_ARGS[@]}"} \\
+    ${HOME_MOUNT_ARGS[@]+"${HOME_MOUNT_ARGS[@]}"} \\
     -v "$REPO_ROOT":"$REPO_ROOT" \\
     -w "$REPO_ROOT" \\
     "$IMAGE" \\
