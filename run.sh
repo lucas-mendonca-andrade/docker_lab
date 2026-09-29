@@ -112,6 +112,35 @@ else
     CONTAINER_PYTHON_BIN="$PYTHON_BIN"
 fi
 
+# Python do venv instalado FORA do projeto (pyenv, conda, ~/.local...): o venv guarda um
+# link absoluto pra ele, que nao existiria no container (so o REPO_ROOT e montado).
+# Segue a cadeia de links do PYTHON_BIN e, pra cada passo fora do projeto e fora dos
+# diretorios do sistema (que a imagem ja tem), monta a instalacao inteira (<prefixo> de
+# <prefixo>/bin/python) read-only no MESMO caminho. Ex.: ~/.pyenv/versions/3.9.21.
+PYTHON_MOUNT_ARGS=()
+if [[ "$CONTAINER_PYTHON_BIN" == /* ]]; then
+    if [[ ! -e "$CONTAINER_PYTHON_BIN" ]]; then
+        echo "PYTHON_BIN não encontrado: $CONTAINER_PYTHON_BIN — edite PYTHON_BIN no job.env." >&2
+        exit 1
+    fi
+    link="$CONTAINER_PYTHON_BIN"
+    for _ in $(seq 1 20); do
+        case "$link" in
+            "$REPO_ROOT"/*|/usr/*|/bin/*|/lib/*|/lib64/*) ;;
+            *)
+                prefix="$(dirname "$(dirname "$link")")"
+                if [[ " ${PYTHON_MOUNT_ARGS[*]-} " != *" $prefix:$prefix:ro "* ]]; then
+                    PYTHON_MOUNT_ARGS+=(-v "$prefix:$prefix:ro")
+                fi
+                ;;
+        esac
+        [[ -L "$link" ]] || break
+        target="$(readlink "$link")"
+        [[ "$target" == /* ]] || target="$(dirname "$link")/$target"
+        link="$(cd "$(dirname "$target")" && pwd)/$(basename "$target")"
+    done
+fi
+
 # Versao do /usr/bin/python3 do host (ex. 3.8 no Ubuntu 20.04) — a imagem aponta o
 # /usr/bin/python3 dela pra mesma versao, senao venvs criados com 'python3 -m venv'
 # quebram dentro do container (ver Dockerfile).
@@ -230,6 +259,7 @@ docker run --rm \\
     -v /etc/passwd:/etc/passwd:ro \\
     -v /etc/group:/etc/group:ro \\
     ${GPU_ARGS[@]+"${GPU_ARGS[@]}"} \\
+    ${PYTHON_MOUNT_ARGS[@]+"${PYTHON_MOUNT_ARGS[@]}"} \\
     -v "$REPO_ROOT":"$REPO_ROOT" \\
     -w "$REPO_ROOT" \\
     "$IMAGE" \\
