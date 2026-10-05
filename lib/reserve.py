@@ -51,15 +51,18 @@ CONTAINER_PREFIX = "docker-lab-"
 # disso, pra cada tipo de recurso (cores, memoria, VRAM) — sempre sobra pelo menos 20%
 # da maquina livre pro SO/SSH/outros processos, mesmo com varios jobs concorrentes.
 MAX_UTILIZATION = 0.8
+# RAM tem teto proprio, mais alto (decisao do Lucas, 2026-10-05): a RAM e o recurso que
+# os jobs mais pedem, e 10% da maquina ja sobra pro SO/SSH.
+MEMORY_MAX_UTILIZATION = 0.9
 
 
-def resource_cap(total):
+def resource_cap(total, utilization=MAX_UTILIZATION):
     """Teto (em unidades inteiras do recurso) equivalente a MAX_UTILIZATION do total.
     Nunca menor que 1 quando existe pelo menos 1 unidade — evita que um recurso muito
     pequeno fique permanentemente inutilizavel (80% de 1 arredondaria pra 0)."""
     if total <= 0:
         return 0
-    return max(1, int(total * MAX_UTILIZATION))
+    return max(1, int(total * utilization))
 
 # Janela de tolerancia entre "acquire" e o container aparecer de verdade no `docker ps`
 # (build de imagem cacheado + docker run ainda levam alguns segundos) — reap() so
@@ -211,11 +214,11 @@ def cmd_acquire(args):
     cores = pick_free_cores(args.cores, state)
 
     total_mem = total_mem_gb()
-    mem_cap = resource_cap(total_mem)
+    mem_cap = resource_cap(total_mem, MEMORY_MAX_UTILIZATION)
     used_mem = used_mem_gb(state)
     if used_mem + args.mem > mem_cap:
         print(
-            f"Pedido de {args.mem}GB ultrapassaria o teto de {int(MAX_UTILIZATION * 100)}% "
+            f"Pedido de {args.mem}GB ultrapassaria o teto de {int(MEMORY_MAX_UTILIZATION * 100)}% "
             f"da máquina: já {used_mem}GB em uso, limite é {mem_cap}GB de {total_mem}GB "
             f"totais (sempre sobra pelo menos {total_mem - mem_cap}GB livre).",
             file=sys.stderr,
@@ -280,14 +283,14 @@ def cmd_status(args):
     reservable_cores = max(0, cap_c - len(busy_cores))
 
     total_m = total_mem_gb()
-    cap_m = resource_cap(total_m)
+    cap_m = resource_cap(total_m, MEMORY_MAX_UTILIZATION)
     used_m = used_mem_gb(state)
     reservable_mem = max(0, cap_m - used_m)
 
     print(f"Cores: {len(busy_cores)} em uso, {reservable_cores} ainda reserváveis "
           f"(teto {pct}% = {cap_c} de {total_c} totais) — livres de verdade: {free_cores}")
     print(f"Memória: {used_m}GB em uso, {reservable_mem}GB ainda reserváveis "
-          f"(teto {pct}% = {cap_m}GB de {total_m}GB totais)")
+          f"(teto {int(MEMORY_MAX_UTILIZATION * 100)}% = {cap_m}GB de {total_m}GB totais)")
     inventory = gpu_inventory()
     for gpu, total_vram in sorted(inventory.items()):
         cap_vram = resource_cap(total_vram)

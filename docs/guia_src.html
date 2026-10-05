@@ -90,7 +90,7 @@ figcaption { font-size: 8.6pt; color: var(--muted); margin-top: 5px; text-align:
 <p>Vários alunos usam a mesma máquina de laboratório. Sem controle, um único experimento pesado podia esgotar CPU, memória ou GPU, derrubar o acesso remoto de todos e até reiniciar a máquina. O docker_lab resolve isso com três mecanismos:</p>
 <div class="grid3">
   <div class="card small"><b>Execução em container</b>Todo script Python roda dentro de um container Docker, com a quantidade de CPU, RAM e VRAM que o próprio aluno pediu, e nada além disso.</div>
-  <div class="card small"><b>Teto de 80% da máquina</b>A soma do que todos os jobs reservaram nunca passa de 80% de cada recurso. Um pedido que ultrapassaria o teto é recusado na hora.</div>
+  <div class="card small"><b>Teto da máquina</b>A soma do que todos os jobs reservaram nunca passa de 80% dos cores e da VRAM, nem de 90% da RAM. Um pedido que ultrapassaria o teto é recusado na hora.</div>
   <div class="card small"><b>Proteções na máquina</b>A potência da GPU fica limitada a 80%, e rodar <code>python3</code> direto no terminal mostra um aviso em vez de executar.</div>
 </div>
 
@@ -98,7 +98,7 @@ figcaption { font-size: 8.6pt; color: var(--muted); margin-top: 5px; text-align:
 <div class="flow">
   <div class="box"><b>job.env</b>o aluno descreve o script e os recursos</div><div class="arr">→</div>
   <div class="box"><b>docker-lab run</b>valida a configuração e monta a imagem</div><div class="arr">→</div>
-  <div class="box"><b>Reserva</b>confere o teto de 80% somando todos os jobs</div><div class="arr">→</div>
+  <div class="box"><b>Reserva</b>confere o teto da máquina somando todos os jobs</div><div class="arr">→</div>
   <div class="box"><b>Container</b>roda em segundo plano, preso aos limites pedidos</div><div class="arr">→</div>
   <div class="box"><b>Fim</b>libera a reserva e registra no histórico</div>
 </div>
@@ -106,9 +106,9 @@ figcaption { font-size: 8.6pt; color: var(--muted); margin-top: 5px; text-align:
 <table>
   <tr><th>Recurso</th><th>Limite por job (definido no job.env)</th><th>Teto conjunto (todos os jobs)</th></tr>
   <tr><td>CPU</td><td><code>CORES</code>: quantidade de cores</td><td>80% dos cores da máquina</td></tr>
-  <tr><td>RAM</td><td><code>MEMORY_GB</code>: passou disso, o job é encerrado</td><td>80% da RAM</td></tr>
+  <tr><td>RAM</td><td><code>MEMORY_GB</code>: passou disso, o job é encerrado</td><td>90% da RAM</td></tr>
   <tr><td>VRAM (memória da GPU)</td><td><code>GPU_MEMORY_GB</code>: passou disso, o job recebe <code>CUDA out of memory</code></td><td>80% da VRAM de cada GPU</td></tr>
-  <tr><td>Potência da GPU</td><td>não é definida por job</td><td>80% da potência de fábrica (TITAN V: 250 W → 200 W)</td></tr>
+  <tr><td>Potência da GPU</td><td>não é definida por job</td><td>80% do limite atual da GPU (TITAN V: 250 W → 200 W)</td></tr>
 </table>
 <p style="font-size:9pt;color:var(--muted)">O processamento da GPU não é reservado por job: quando dois jobs usam a mesma GPU, o driver da NVIDIA alterna entre eles, e cada um fica proporcionalmente mais lento.</p>
 
@@ -122,7 +122,7 @@ sudo /opt/docker_lab/setup.sh</pre>
 <table>
   <tr><th>Passo</th><th>O que faz</th></tr>
   <tr><td>1. Instalação compartilhada</td><td>Libera <code>state/</code> e <code>logs/</code> para todos os usuários, que passam a gravar no mesmo controle de reservas. Usuários criados no futuro já funcionam, sem nenhum comando extra.</td></tr>
-  <tr><td>2. Potência da GPU</td><td>Limita cada GPU a 80% da potência de fábrica e instala um serviço do systemd que reaplica o limite a cada boot.</td></tr>
+  <tr><td>2. Potência da GPU</td><td>Limita cada GPU a 80% do limite de potência atual e instala um serviço do systemd que reaplica o limite a cada boot.</td></tr>
   <tr><td>3. Comando <code>docker-lab</code></td><td>Instala o comando <code>docker-lab</code> para todos os usuários.</td></tr>
   <tr><td>4. Bloqueio de Python direto</td><td>Faz <code>python3 script.py</code> no terminal mostrar um aviso em vez de executar, inclusive com venv ativado. Os binários do sistema não são alterados.</td></tr>
 </table>
@@ -231,7 +231,7 @@ power.limit [W], power.default_limit [W]
 </figure>
 
 <h3>Passo 3 — Acompanhar: <code>docker-lab status</code> e o log</h3>
-<p><code>docker-lab status</code> mostra o que cada recurso tem em uso, o que ainda pode ser reservado dentro do teto de 80% e quais jobs estão ativos. O andamento do script fica no log.</p>
+<p><code>docker-lab status</code> mostra o que cada recurso tem em uso, o que ainda pode ser reservado dentro do teto da máquina e quais jobs estão ativos. O andamento do script fica no log.</p>
 
 <figure>
 <div class="vsc">
@@ -243,7 +243,7 @@ power.limit [W], power.default_limit [W]
         <div class="ptabs"><span>PROBLEMS</span><span>OUTPUT</span><span class="on">TERMINAL</span></div>
 <pre class="term"><span class="pu">aluno@ainetmachine</span>:<span class="pp">~/meu_projeto</span>$ docker-lab status
 Cores: 6 em uso, 6 ainda reserváveis (teto 80% = 12 de 16 totais) — livres de verdade: [6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
-Memória: 20GB em uso, 29GB ainda reserváveis (teto 80% = 49GB de 62GB totais)
+Memória: 20GB em uso, 35GB ainda reserváveis (teto 90% = 55GB de 62GB totais)
 GPU 0 VRAM: 8GB em uso, 1GB ainda reserváveis (teto 80% = 9GB de 12GB totais)
 
 Jobs ativos:
@@ -349,7 +349,7 @@ Projeto no GitHub: https://github.com/lucas-mendonca-andrade/docker_lab
 </figure>
 <div class="note warn">O bloqueio é uma <b>barreira contra esquecimento</b>, não uma trava de segurança. Caminhos absolutos (<code>/usr/bin/python3.11 x.py</code>), <code>./script.py</code> e scripts <code>.sh</code> não interativos passam sem aviso. Use sempre o <code>docker-lab run</code>.</div>
 
-<h3>Passar do teto de 80%</h3>
+<h3>Passar do teto da máquina</h3>
 <p>Se o pedido de um job, somado ao que já está reservado, passar do teto de qualquer recurso, a execução é recusada na hora, com a explicação do motivo. Nada entra em fila: espere algum job terminar, ou peça menos recurso.</p>
 <figure>
 <div class="vsc">
