@@ -90,7 +90,7 @@ figcaption { font-size: 8.6pt; color: var(--muted); margin-top: 5px; text-align:
 <p>Vários alunos usam a mesma máquina de laboratório. Sem controle, um único experimento pesado podia esgotar CPU, memória ou GPU, derrubar o acesso remoto de todos e até reiniciar a máquina. O docker_lab resolve isso com três mecanismos:</p>
 <div class="grid3">
   <div class="card small"><b>Execução em container</b>Todo script Python roda dentro de um container Docker, com a quantidade de CPU, RAM e VRAM que o próprio aluno pediu, e nada além disso.</div>
-  <div class="card small"><b>Teto da máquina</b>A soma do que todos os jobs reservaram nunca passa de 80% dos cores e da VRAM, nem de 90% da RAM. Um pedido que ultrapassaria o teto é recusado na hora.</div>
+  <div class="card small"><b>Teto da máquina</b>A soma do que todos os jobs reservaram nunca passa de 80% dos cores e da VRAM, nem de 95% da RAM. Um pedido que ultrapassaria o teto é recusado na hora.</div>
   <div class="card small"><b>Proteções na máquina</b>A potência da GPU fica limitada a 80%, e rodar <code>python3</code> direto no terminal mostra um aviso em vez de executar.</div>
 </div>
 
@@ -106,7 +106,7 @@ figcaption { font-size: 8.6pt; color: var(--muted); margin-top: 5px; text-align:
 <table>
   <tr><th>Recurso</th><th>Limite por job (definido no job.env)</th><th>Teto conjunto (todos os jobs)</th></tr>
   <tr><td>CPU</td><td><code>CORES</code>: quantidade de cores</td><td>80% dos cores da máquina</td></tr>
-  <tr><td>RAM</td><td><code>MEMORY_GB</code>: passou disso, o job é encerrado</td><td>90% da RAM</td></tr>
+  <tr><td>RAM</td><td><code>MEMORY_GB</code>: passou disso, o job é encerrado</td><td>95% da RAM</td></tr>
   <tr><td>VRAM (memória da GPU)</td><td><code>GPU_MEMORY_GB</code>: passou disso, o job recebe <code>CUDA out of memory</code></td><td>80% da VRAM de cada GPU</td></tr>
   <tr><td>Potência da GPU</td><td>não é definida por job</td><td>80% do limite atual da GPU (TITAN V: 250 W → 200 W)</td></tr>
 </table>
@@ -243,7 +243,7 @@ power.limit [W], power.default_limit [W]
         <div class="ptabs"><span>PROBLEMS</span><span>OUTPUT</span><span class="on">TERMINAL</span></div>
 <pre class="term"><span class="pu">aluno@ainetmachine</span>:<span class="pp">~/meu_projeto</span>$ docker-lab status
 Cores: 6 em uso, 6 ainda reserváveis (teto 80% = 12 de 16 totais) — livres de verdade: [6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
-Memória: 20GB em uso, 35GB ainda reserváveis (teto 90% = 55GB de 62GB totais)
+Memória: 20GB em uso, 38GB ainda reserváveis (teto 95% = 58GB de 62GB totais)
 GPU 0 VRAM: 8GB em uso, 1GB ainda reserváveis (teto 80% = 9GB de 12GB totais)
 
 Jobs ativos:

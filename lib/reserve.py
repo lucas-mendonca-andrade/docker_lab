@@ -51,9 +51,9 @@ CONTAINER_PREFIX = "docker-lab-"
 # disso, pra cada tipo de recurso (cores, memoria, VRAM) — sempre sobra pelo menos 20%
 # da maquina livre pro SO/SSH/outros processos, mesmo com varios jobs concorrentes.
 MAX_UTILIZATION = 0.8
-# RAM tem teto proprio, mais alto (decisao do Lucas, 2026-10-05): a RAM e o recurso que
-# os jobs mais pedem, e 10% da maquina ja sobra pro SO/SSH.
-MEMORY_MAX_UTILIZATION = 0.9
+# RAM tem teto proprio, mais alto (decisao do Lucas, 2026-10-05: 95%): a RAM e o recurso que
+# os jobs mais pedem; 5% da maquina sobra pro SO/SSH.
+MEMORY_MAX_UTILIZATION = 0.95
 
 
 def resource_cap(total, utilization=MAX_UTILIZATION):

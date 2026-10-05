@@ -4,7 +4,7 @@
 
 - Organizar e limitar múltiplas execuções simultâneas em um servidor de experimentos
   compartilhado (CPU, RAM e VRAM da GPU), com teto da máquina somando todos os jobs
-  (80% de CPU e VRAM, 90% de RAM), e cada job limitado ao que pediu.
+  (80% de CPU e VRAM, 95% de RAM), e cada job limitado ao que pediu.
 
 ## Como faz isso?
 
