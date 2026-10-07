@@ -118,6 +118,7 @@ fi
 # diretorios do sistema (que a imagem ja tem), monta a instalacao inteira (<prefixo> de
 # <prefixo>/bin/python) read-only no MESMO caminho. Ex.: ~/.pyenv/versions/3.9.21.
 PYTHON_MOUNT_ARGS=()
+EXTERNAL_PREFIXES=()
 if [[ "$CONTAINER_PYTHON_BIN" == /* ]]; then
     if [[ ! -e "$CONTAINER_PYTHON_BIN" ]]; then
         echo "PYTHON_BIN não encontrado: $CONTAINER_PYTHON_BIN — edite PYTHON_BIN no job.env." >&2
@@ -131,6 +132,7 @@ if [[ "$CONTAINER_PYTHON_BIN" == /* ]]; then
                 prefix="$(dirname "$(dirname "$link")")"
                 if [[ " ${PYTHON_MOUNT_ARGS[*]-} " != *" $prefix:$prefix:ro "* ]]; then
                     PYTHON_MOUNT_ARGS+=(-v "$prefix:$prefix:ro")
+                    EXTERNAL_PREFIXES+=("$prefix")
                 fi
                 ;;
         esac
@@ -168,6 +170,39 @@ if ! BUILD_OUTPUT=$(docker build -q --build-arg "HOST_PYTHON3_VERSION=$HOST_PYTH
     echo "$BUILD_OUTPUT" >&2
     echo "== Falha ao buildar a imagem — veja o erro acima. ==" >&2
     exit 1
+fi
+
+# Python externo compilado NESTA maquina (ex. ~/.local/python311 num Ubuntu 20.04) usa
+# bibliotecas do sistema daqui que a imagem (Ubuntu 24.04) pode nao ter — ex. o _ctypes
+# linkado contra libffi.so.7, quando a imagem so tem libffi.so.8 ("ImportError:
+# libffi.so.7: cannot open shared object file"). Pra cada prefixo externo, o ldd do
+# host lista as libs do interpretador e dos modulos da biblioteca padrao (lib-dynload);
+# so as que FALTAM na imagem sao montadas (read-only) em HOSTLIBS_DIR, que entra no
+# LD_LIBRARY_PATH — nenhuma lib que a imagem ja tem e substituida.
+HOSTLIBS_DIR="/docker_lab_hostlibs"
+HOSTLIB_ARGS=()
+if [[ ${#EXTERNAL_PREFIXES[@]} -gt 0 ]]; then
+    IMAGE_ID="$(docker image inspect -f '{{.Id}}' "$IMAGE" | cut -d: -f2 | cut -c1-12)"
+    IMAGE_LIBS_CACHE="$STATE_DIR/image_libs_${IMAGE_ID}.txt"
+    if [[ ! -s "$IMAGE_LIBS_CACHE" ]]; then
+        docker run --rm --entrypoint ldconfig "$IMAGE" -p \
+            | awk '$2 ~ /^\(/ {print $1}' | sort -u > "$IMAGE_LIBS_CACHE.$$"
+        mv -f "$IMAGE_LIBS_CACHE.$$" "$IMAGE_LIBS_CACHE"
+    fi
+    while read -r soname host_path; do
+        grep -qxF "$soname" "$IMAGE_LIBS_CACHE" && continue
+        HOSTLIB_ARGS+=(-v "$(readlink -f "$host_path"):$HOSTLIBS_DIR/$soname:ro")
+    done < <(
+        for prefix in "${EXTERNAL_PREFIXES[@]}"; do
+            find "$prefix/bin" "$prefix/lib" -maxdepth 3 -type f \
+                \( -name 'python3*' -o -name 'libpython*.so*' -o -path '*/lib-dynload/*.so' \) \
+                2>/dev/null
+        done | xargs -r ldd 2>/dev/null \
+            | awk '$2 == "=>" && $3 ~ /^\// {print $1, $3}' | sort -u
+    )
+    if [[ ${#HOSTLIB_ARGS[@]} -gt 0 ]]; then
+        HOSTLIB_ARGS+=(-e "LD_LIBRARY_PATH=$HOSTLIBS_DIR")
+    fi
 fi
 
 GPU_DESC="gpu=$GPU"
@@ -276,6 +311,7 @@ docker run --rm \\
     -v /etc/group:/etc/group:ro \\
     ${GPU_ARGS[@]+"${GPU_ARGS[@]}"} \\
     ${PYTHON_MOUNT_ARGS[@]+"${PYTHON_MOUNT_ARGS[@]}"} \\
+    ${HOSTLIB_ARGS[@]+"${HOSTLIB_ARGS[@]}"} \\
     ${HOME_MOUNT_ARGS[@]+"${HOME_MOUNT_ARGS[@]}"} \\
     -v "$REPO_ROOT":"$REPO_ROOT" \\
     -w "$REPO_ROOT" \\
