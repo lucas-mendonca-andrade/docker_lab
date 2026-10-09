@@ -219,7 +219,9 @@ fi
 echo "== Reservado: cores do host = $ALLOC_CORES =="
 
 CONTAINER_NAME="docker-lab-${JOB_NAME}"
-LOG_FILE="$LOGS_DIR/${JOB_NAME}.log"
+# Um log POR EXECUCAO (data/hora no nome) — rodar de novo nao apaga o log anterior.
+# 'docker-lab logs <arquivo.env>' lista e mostra esses logs.
+LOG_FILE="$LOGS_DIR/${JOB_NAME}_$(date +%Y%m%d_%H%M%S).log"
 RUNNER_SCRIPT="$STATE_DIR/${JOB_NAME}.runner.sh"
 # Marcador que o stop.sh cria ANTES de mandar 'docker stop' — o trap abaixo confere se
 # ele existe pra saber se o fim do container foi um stop deliberado (status
@@ -233,7 +235,8 @@ rm -f "$STOP_MARKER"
 # porque so a partir daqui o job foi de fato aceito (recurso reservado). Um pedido
 # recusado por falta de recurso nunca chega a "executar", entao nao entra no historico.
 RUN_ID=$(flock "$HISTORY_LOCK" "$HOST_PYTHON" "$HERE/lib/reserve.py" --history "$HISTORY_FILE" \
-    history-start --name "$JOB_NAME" --user "$REAL_USER" --script "$SCRIPT")
+    history-start --name "$JOB_NAME" --user "$REAL_USER" --script "$SCRIPT" \
+    --log "$LOG_FILE" --memory-gb "$MEMORY_GB" --gpu-memory-gb "$GPU_MEMORY_GB")
 
 # GPU: o container so enxerga a GPU pedida (--gpus), e o HAMi-core (libvgpu.so, ver
 # Dockerfile), carregado via LD_PRELOAD em todo processo do container, limita a VRAM ao
@@ -287,20 +290,42 @@ HOME_MOUNT_ARGS=(-v "$HOME":"$HOME")
 # setup.sh de framework tentar fazer uma pergunta interativa (ex. "confirma? [y/N]"),
 # ele recebe EOF na hora em vez de ficar esperando um terminal que nunca vai responder —
 # essencial rodando em background, sem ninguem na frente do terminal.
+#
+# Fim do job (trap): descobre POR QUE terminou, pra o history dizer mais que "erro":
+# - stop.sh deixou o marcador -> "interrompido";
+# - o Docker marcou o container como OOMKilled (passou do MEMORY_GB) -> "sem RAM";
+# - saiu com erro e o log tem "CUDA out of memory"/OOM do HAMi-core (passou do
+#   GPU_MEMORY_GB) -> "sem VRAM".
+# Nos dois ultimos casos, a sugestao tambem vai pro FIM DO LOG. Por isso o container NAO
+# usa --rm: o OOMKilled so pode ser consultado (docker inspect) antes de removê-lo — o
+# proprio trap remove depois. Um container antigo parado com o mesmo nome (ex. maquina
+# reiniciou no meio do job) e removido antes de subir o novo.
 cat > "$RUNNER_SCRIPT" <<EOF
 #!/usr/bin/env bash
 trap '
 EC=\$?
-INTERRUPT_ARGS=()
+FINISH_ARGS=()
 if [[ -f "$STOP_MARKER" ]]; then
-    INTERRUPT_ARGS=(--interrupted)
+    FINISH_ARGS=(--interrupted)
     rm -f "$STOP_MARKER"
+elif [[ "\$(docker inspect -f "{{.State.OOMKilled}}" "$CONTAINER_NAME" 2>/dev/null)" == "true" ]]; then
+    FINISH_ARGS=(--reason ram)
+    echo
+    echo "[docker_lab] JOB ENCERRADO POR FALTA DE RAM: passou do limite MEMORY_GB=${MEMORY_GB}."
+    echo "[docker_lab] Sugestão: aumente MEMORY_GB no arquivo .env e rode de novo."
+elif [[ "\$EC" -ne 0 ]] && grep -qE "HAMI-core ERROR.*OOM|CUDA out of memory|CUDA_ERROR_OUT_OF_MEMORY" "$LOG_FILE"; then
+    FINISH_ARGS=(--reason vram)
+    echo
+    echo "[docker_lab] JOB ENCERRADO POR FALTA DE VRAM: passou do limite GPU_MEMORY_GB=${GPU_MEMORY_GB}."
+    echo "[docker_lab] Sugestão: aumente GPU_MEMORY_GB no arquivo .env (ou reduza o batch size) e rode de novo."
 fi
+docker rm "$CONTAINER_NAME" >/dev/null 2>&1
 flock "$LOCK_FILE" "$HOST_PYTHON" "$HERE/lib/reserve.py" --state "$STATE_FILE" release --name "$JOB_NAME"
-flock "$HISTORY_LOCK" "$HOST_PYTHON" "$HERE/lib/reserve.py" --history "$HISTORY_FILE" history-finish --run-id "$RUN_ID" --exit-code "\$EC" "\${INTERRUPT_ARGS[@]}"
+flock "$HISTORY_LOCK" "$HOST_PYTHON" "$HERE/lib/reserve.py" --history "$HISTORY_FILE" history-finish --run-id "$RUN_ID" --exit-code "\$EC" "\${FINISH_ARGS[@]}"
 rm -f "$RUNNER_SCRIPT"
 ' EXIT
-docker run --rm \\
+docker rm "$CONTAINER_NAME" >/dev/null 2>&1
+docker run \\
     --name "$CONTAINER_NAME" \\
     --cpuset-cpus="$ALLOC_CORES" \\
     --memory="${MEMORY_GB}g" \\
@@ -329,5 +354,6 @@ disown
 
 echo "== Rodando em segundo plano: $CONTAINER_PYTHON_BIN $SCRIPT =="
 echo "   Container: $CONTAINER_NAME"
-echo "   Log:       $LOG_FILE   (acompanhe com: tail -f \"$LOG_FILE\")"
+echo "   Log:       $LOG_FILE"
+echo "   Ver o log: docker-lab logs $JOB_ENV      (acompanhar ao vivo: tail -f \"$LOG_FILE\")"
 echo "   Pra parar: docker-lab stop"

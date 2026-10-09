@@ -16,6 +16,7 @@
 
 ## Como usar
 
+Guia rápido (exemplo completo: projeto Python, `job.env`, rodar, status, parar, histórico): [`docs/guia_rapido.pdf`](docs/guia_rapido.pdf).
 Guia completo com exemplos no VS Code: [`docs/guia_docker_lab.pdf`](docs/guia_docker_lab.pdf).
 Para validar a instalação (testes de CPU, RAM e GPU): [`examples/`](examples/README.md).
 
@@ -52,11 +53,21 @@ Edite o `job.env` (ele fica **sempre na raiz do seu projeto**):
 Na raiz do seu projeto (onde está o `job.env`):
 
 ```bash
-docker-lab run        # executa o job (em segundo plano; log em /opt/docker_lab/logs/<JOB_NAME>.log)
-docker-lab status     # recursos em uso e livres
-docker-lab stop       # para um job ativo (menu)
-docker-lab history    # histórico de execuções
+docker-lab run job.env       # executa o job em segundo plano (padrão: job.env)
+docker-lab status            # recursos em uso e livres
+docker-lab logs job.env      # lista as execuções desse job e mostra as últimas 50 linhas do log
+docker-lab logs job.env 2    # o log de outra execução (pelo número da lista)
+docker-lab stop              # para um job ativo (menu)
+docker-lab history           # histórico de execuções de todos os usuários
 ```
+
+Um projeto pode ter quantos arquivos `.env` precisar, cada um com um `JOB_NAME` diferente.
+Cada execução guarda o próprio log (com data e hora no nome), em `/opt/docker_lab/logs/`.
+
+Status no `history`: `executou`, `erro` (veja o motivo com `docker-lab logs`),
+`interrompido` (parado com `docker-lab stop` ou máquina reiniciada), **`sem RAM`** (passou
+do `MEMORY_GB`) e **`sem VRAM`** (passou do `GPU_MEMORY_GB`). Nos dois últimos, a coluna
+`SUGESTAO` diz o que aumentar no `.env`, e o fim do log explica o motivo.
 
 O job roda com o **seu usuário**: tudo o que ele gravar no projeto é seu, sem precisar
 de `sudo`. Se sobraram arquivos com dono `root` de execuções antigas, rode

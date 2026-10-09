@@ -13,6 +13,9 @@ Uso:
   docker-lab status          mostra recursos em uso e livres
   docker-lab stop            para um job ativo (menu)
   docker-lab history         mostra o histórico de execuções
+  docker-lab logs [job.env] [N]
+                             lista as execuções desse job e mostra o fim do log
+                             (padrão: a mais recente; N escolhe outra)
   docker-lab corrigir-permissoes [pasta]
                              devolve pra você arquivos com dono root na sua pasta
                              (sobra de jobs antigos; padrão: pasta atual)
@@ -24,6 +27,7 @@ case "${1:-}" in
     status)  exec "$HERE/status.sh" ;;
     stop)    exec "$HERE/stop.sh" ;;
     history) exec "$HERE/history.sh" ;;
+    logs)    exec "$HERE/lib/logs.sh" "${2:-job.env}" "${3:-}" ;;
     corrigir-permissoes) exec "$HERE/lib/corrigir_permissoes.sh" "${2:-.}" ;;
     *)       uso; exit 1 ;;
 esac

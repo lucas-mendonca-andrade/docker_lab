@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>docker-lab — Guia rápido</title>
+<style>
+@page { size: A4; margin: 13mm 14mm 12mm 14mm; }
+:root { --ink: #1d2433; --muted: #5b6475; --accent: #1f6feb; }
+* { box-sizing: border-box; }
+body { font-family: "DejaVu Sans", "Liberation Sans", sans-serif; color: var(--ink); font-size: 9.6pt; line-height: 1.45; margin: 0; background: #fff; }
+h1 { font-size: 19pt; margin: 0 0 2px; }
+.sub { color: var(--muted); margin-bottom: 8px; }
+h2 { font-size: 12pt; margin: 12px 0 5px; padding-bottom: 3px; border-bottom: 2px solid var(--accent); break-after: avoid; }
+p { margin: 3px 0; }
+code { font-family: "DejaVu Sans Mono", monospace; font-size: 8.5pt; background: #f1f3f7; padding: 0 3px; border-radius: 3px; }
+pre { font-family: "DejaVu Sans Mono", monospace; font-size: 8pt; background: #0f172a; color: #e2e8f0; padding: 8px 11px; border-radius: 6px; margin: 5px 0; white-space: pre; break-inside: avoid; line-height: 1.45; overflow: hidden; }
+.file { font-family: "DejaVu Sans Mono", monospace; font-size: 7.8pt; color: var(--muted); margin: 6px 0 -3px; }
+.c { color: #94a3b8; } .d { color: #7dd3fc; } .f { color: #fcd34d; } .p { color: #4ade80; } .k { color: #c4b5fd; } .s { color: #fca5a5; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+</style>
+</head>
+<body>
+
+<h1>docker-lab — exemplo completo</h1>
+<div class="sub">Um projeto Python de exemplo, o <code>job.env</code> dele e os comandos para rodar, acompanhar, parar e ver o histórico.</div>
+<p>Cada arquivo <code>.env</code> descreve um job, e um projeto pode ter <b>quantos arquivos <code>.env</code> precisar</b> (por exemplo <code>job.env</code>, <code>job_treino_grande.env</code>, <code>job_analise.env</code>), todos na raiz do projeto e cada um com um <code>JOB_NAME</code> diferente.</p>
+
+<h2>1. O projeto de exemplo</h2>
+<div class="cols">
+<div>
+<div class="file">estrutura</div>
+<pre><span class="d">~/meu_projeto/</span>
+├── <span class="f">job.env</span>          <span class="c">← fica na raiz</span>
+├── <span class="d">venv/</span>            <span class="c">← Python do projeto</span>
+├── <span class="d">dados/</span>
+│   └── iris.csv
+├── <span class="d">resultados/</span>
+├── requirements.txt <span class="c">← pacotes do projeto</span>
+└── treino.py        <span class="c">← script a rodar</span></pre>
+</div>
+<div>
+<div class="file">requirements.txt</div>
+<pre>pandas
+scikit-learn</pre>
+<div class="file">criar o venv (uma vez)</div>
+<pre>cd ~/meu_projeto
+/usr/bin/python3 -m venv venv
+venv/bin/pip install -r requirements.txt</pre>
+<p style="font-size:8.6pt;color:var(--muted)">Use o caminho completo <code>/usr/bin/python3</code>: o <code>python3</code> puro está bloqueado no terminal.</p>
+</div>
+</div>
+
+<h2>2. O job.env</h2>
+<p>Copie o modelo com <code>cp /opt/docker_lab/job.env.example ~/meu_projeto/job.env</code> e deixe assim:</p>
+<div class="file">~/meu_projeto/job.env</div>
+<pre><span class="k">SCRIPT</span>=<span class="s">treino.py</span>              <span class="c"># script a rodar (relativo à pasta do projeto)</span>
+<span class="k">PYTHON_BIN</span>=<span class="s">venv/bin/python</span>    <span class="c"># Python do venv do projeto</span>
+<span class="k">CORES</span>=<span class="p">2</span>                       <span class="c"># quantos cores</span>
+<span class="k">MEMORY_GB</span>=<span class="p">4</span>                   <span class="c"># RAM máxima (passou disso, o job é encerrado)</span>
+<span class="k">GPU</span>=<span class="s">none</span>                      <span class="c"># "none" sem GPU, ou "0" para usar a GPU 0</span>
+<span class="c">#GPU_MEMORY_GB=8              # VRAM máxima: obrigatório quando GPU=0</span>
+<span class="k">JOB_NAME</span>=<span class="s">{USERNAME}_treino</span>    <span class="c"># mantenha o {USERNAME}_, troque só o resto</span></pre>
+
+<h2>3. Rodar</h2>
+<p>Dentro da pasta do projeto. O job vai para segundo plano, e você pode fechar o terminal.</p>
+<pre><span class="p">aluno@servidor</span>:<span class="d">~/meu_projeto</span>$ docker-lab run job.env
+== Buildando imagem (docker-lab-runner:latest) ==
+== Reservando recurso para 'aluno_treino' (cores=2 mem=4GB gpu=none) ==
+== Reservado: cores do host = 0,1 ==
+== Rodando em segundo plano: /home/aluno/meu_projeto/venv/bin/python treino.py ==
+   Container: docker-lab-aluno_treino
+   Log:       /opt/docker_lab/logs/aluno_treino_20261008_103005.log
+   Ver o log: docker-lab logs job.env
+   Pra parar: docker-lab stop</pre>
+
+<h2>4. Acompanhar: status e log</h2>
+<pre><span class="p">aluno@servidor</span>:<span class="d">~/meu_projeto</span>$ docker-lab status
+Cores: 2 em uso, 10 ainda reserváveis (teto 80% = 12 de 16 totais) — livres de verdade: [2, 3, ..., 15]
+Memória: 4GB em uso, 54GB ainda reserváveis (teto 95% = 58GB de 62GB totais)
+
+Jobs ativos:
+  aluno_treino: cores=[0, 1] mem=4GB
+
+<span class="p">aluno@servidor</span>:<span class="d">~/meu_projeto</span>$ docker-lab logs job.env
+Execuções de 'aluno_treino' (job.env):
+    N  INICIO                FIM                   STATUS        SUGESTAO
+    1  2026-10-08T10:02:11   2026-10-08T10:02:15   sem RAM       aumente MEMORY_GB (pediu 1GB)
+    2  2026-10-08T10:30:05   -                     executando
+
+== Últimas 50 linhas do log da execução 2 ==
+n_estimators=50: acurácia=0.953
+n_estimators=100: acurácia=0.960
+
+== Log completo da execução 2: /opt/docker_lab/logs/aluno_treino_20261008_103005.log
+   Ver tudo:             less "/opt/docker_lab/logs/aluno_treino_20261008_103005.log"
+   Acompanhar ao vivo:   tail -f "/opt/docker_lab/logs/aluno_treino_20261008_103005.log"
+   Ver outra execução:   docker-lab logs job.env &lt;N&gt;</pre>
+<p>Cada execução guarda o próprio log. <code>docker-lab logs job.env</code> lista todas as execuções desse <code>.env</code> e mostra as <b>últimas 50 linhas</b> da mais recente. Para ver outra, passe o número: <code>docker-lab logs job.env 1</code>.</p>
+
+<h2>5. Parar</h2>
+<pre><span class="p">aluno@servidor</span>:<span class="d">~/meu_projeto</span>$ docker-lab stop
+Jobs ativos:
+1) aluno_treino (cores=[0, 1] mem=4GB)
+2) Cancelar
+Qual você quer parar (número, ou 'Cancelar')? 1
+Parando 'docker-lab-aluno_treino'...
+Parado. A reserva é liberada sozinha em alguns instantes.</pre>
+<p>Parar <b>encerra</b> o job: não é possível retomá-lo depois.</p>
+
+<h2>6. Histórico</h2>
+<pre style="font-size:7.1pt"><span class="p">aluno@servidor</span>:<span class="d">~/meu_projeto</span>$ docker-lab history
+JOB_NAME          USUARIO  INICIO               FIM                  STATUS        SUGESTAO
+-------------------------------------------------------------------------------------------------------------
+aluno_treino      aluno    2026-10-08T10:02:11  2026-10-08T10:02:15  sem RAM       aumente MEMORY_GB (pediu 1GB)
+aluno_treino      aluno    2026-10-08T10:30:05  2026-10-08T10:52:19  interrompido
+aluno_analise     aluno    2026-10-08T11:04:40  2026-10-08T11:31:02  executou</pre>
+<table style="width:100%;border-collapse:collapse;font-size:8.8pt;margin-top:4px">
+<tr><td style="padding:2px 6px"><code>executou</code></td><td>terminou sem erro</td></tr>
+<tr><td style="padding:2px 6px"><code>erro</code></td><td>o script falhou: veja o motivo com <code>docker-lab logs</code></td></tr>
+<tr><td style="padding:2px 6px"><code>sem RAM</code></td><td>passou do <code>MEMORY_GB</code>: aumente no <code>.env</code></td></tr>
+<tr><td style="padding:2px 6px"><code>sem VRAM</code></td><td>passou do <code>GPU_MEMORY_GB</code> (<code>CUDA out of memory</code>): aumente no <code>.env</code> ou reduza o batch size</td></tr>
+<tr><td style="padding:2px 6px"><code>interrompido</code></td><td>foi parado com <code>docker-lab stop</code>, ou a máquina reiniciou</td></tr>
+</table>
+
+</body>
+</html>

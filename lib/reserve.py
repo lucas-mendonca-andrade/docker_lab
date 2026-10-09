@@ -345,6 +345,9 @@ def cmd_history_start(args):
         "ended_at": None,
         "status": "executando",
         "exit_code": None,
+        "log": args.log,
+        "memory_gb": args.memory_gb,
+        "gpu_memory_gb": args.gpu_memory_gb,
     })
     write_history(args.history, history)
     print(run_id)  # stdout: run.sh guarda isso pra passar pro history-finish depois
@@ -358,6 +361,10 @@ def cmd_history_finish(args):
             run["exit_code"] = args.exit_code
             if args.interrupted:
                 run["status"] = "interrompido"
+            elif args.reason == "ram":
+                run["status"] = "sem RAM"
+            elif args.reason == "vram":
+                run["status"] = "sem VRAM"
             else:
                 run["status"] = "executou" if args.exit_code == 0 else "erro"
             break
@@ -367,31 +374,71 @@ def cmd_history_finish(args):
     write_history(args.history, history)
 
 
+def display_status(run, now):
+    """Status pra exibicao. Execucoes que ficaram "executando" mas cujo container ja nao
+    existe mais (crash, maquina reiniciada, etc. — nunca passaram pelo history-finish)
+    aparecem como "interrompido", sem alterar o arquivo. Mesma folga de
+    GRACE_PERIOD_SECONDS do reap() — senao uma consulta bem na hora do inicio (container
+    ainda nao apareceu no `docker ps`) mostraria "interrompido" num job que acabou de
+    comecar."""
+    status = run["status"]
+    if status == "executando":
+        started_ts = datetime.datetime.fromisoformat(run["started_at"]).timestamp()
+        if now - started_ts > GRACE_PERIOD_SECONDS and not container_is_running(run["job_name"]):
+            status = "interrompido"
+    return status
+
+
+def status_hint(run, status):
+    """Sugestao pro usuario quando o job morreu por falta de memoria."""
+    if status == "sem RAM":
+        pediu = f" (pediu {run['memory_gb']}GB)" if run.get("memory_gb") else ""
+        return f"aumente MEMORY_GB{pediu}"
+    if status == "sem VRAM":
+        pediu = f" (pediu {run['gpu_memory_gb']}GB)" if run.get("gpu_memory_gb") else ""
+        return f"aumente GPU_MEMORY_GB{pediu}"
+    return ""
+
+
 def cmd_history_list(args):
     history = read_history(args.history)
     runs = history["runs"]
     if not runs:
         print("Nenhuma execução registrada ainda.")
         return
-    # Execuções que ficaram "executando" mas cujo container ja nao existe mais (crash,
-    # maquina reiniciada, etc. — nunca passaram pelo history-finish de verdade) aparecem
-    # como "interrompido" aqui, sem alterar o arquivo (so um ajuste de exibicao). Mesma
-    # folga de GRACE_PERIOD_SECONDS do reap() — senao um history-list chamado bem na
-    # hora do inicio (container ainda nao apareceu no `docker ps`) mostraria
-    # "interrompido" por engano num job que na verdade acabou de comecar.
     now = time.time()
-    header = f"{'JOB_NAME':40s} {'USUARIO':16s} {'INICIO':20s} {'FIM':20s} {'STATUS':12s}"
+    header = (f"{'JOB_NAME':40s} {'USUARIO':16s} {'INICIO':20s} {'FIM':20s} "
+              f"{'STATUS':12s} {'SUGESTAO'}")
     print(header)
-    print("-" * len(header))
+    print("-" * (len(header) + 24))
     for run in sorted(runs, key=lambda r: r["started_at"]):
-        status = run["status"]
-        if status == "executando":
-            started_ts = datetime.datetime.fromisoformat(run["started_at"]).timestamp()
-            if now - started_ts > GRACE_PERIOD_SECONDS and not container_is_running(run["job_name"]):
-                status = "interrompido"
+        status = display_status(run, now)
         ended = run["ended_at"] or "-"
         print(f"{run['job_name']:40s} {run['user']:16s} {run['started_at']:20s} "
-              f"{ended:20s} {status:12s}")
+              f"{ended:20s} {status:12s} {status_hint(run, status)}".rstrip())
+
+
+def cmd_history_runs(args):
+    """Execucoes de UM job, 1 por linha, separadas por TAB: status, inicio, fim, log,
+    sugestao — usado pelo 'docker-lab logs'. Execucoes antigas (antes de existir um log
+    por execucao) nao tem 'log'; a mais recente delas aponta pro log antigo
+    <JOB_NAME>.log, se ainda existir (as anteriores foram sobrescritas por ele)."""
+    history = read_history(args.history)
+    runs = sorted((r for r in history["runs"] if r["job_name"] == args.name),
+                  key=lambda r: r["started_at"])
+    legacy = os.path.join(args.logs_dir, f"{args.name}.log")
+    legacy_owner = None
+    for run in runs:
+        if not run.get("log"):
+            legacy_owner = run["run_id"]
+    now = time.time()
+    for run in runs:
+        log = run.get("log") or ""
+        if not log and run["run_id"] == legacy_owner and os.path.isfile(legacy):
+            log = legacy
+        status = display_status(run, now)
+        print("\t".join([status, run["started_at"], run["ended_at"] or "-", log or "-",
+                         status_hint(run, status)]))
 
 
 def cmd_list(args):
@@ -435,6 +482,9 @@ def main():
     p_hstart.add_argument("--name", required=True)
     p_hstart.add_argument("--user", required=True)
     p_hstart.add_argument("--script", required=True)
+    p_hstart.add_argument("--log", default=None, help="arquivo de log desta execucao")
+    p_hstart.add_argument("--memory-gb", type=int, default=None, dest="memory_gb")
+    p_hstart.add_argument("--gpu-memory-gb", type=int, default=None, dest="gpu_memory_gb")
     p_hstart.set_defaults(func=cmd_history_start)
 
     p_hfinish = sub.add_parser("history-finish", help="Registra o fim de uma execucao")
@@ -445,10 +495,20 @@ def main():
         help="Forca status 'interrompido' (job parado deliberadamente via stop.sh, "
              "nao um erro de verdade) independente do exit code",
     )
+    p_hfinish.add_argument(
+        "--reason", choices=["ram", "vram"], default=None,
+        help="Job morreu por falta de RAM (container OOMKilled) ou de VRAM (CUDA out of "
+             "memory) — status 'sem RAM'/'sem VRAM' em vez de 'erro'",
+    )
     p_hfinish.set_defaults(func=cmd_history_finish)
 
     p_hlist = sub.add_parser("history-list", help="Mostra o historico de execucoes")
     p_hlist.set_defaults(func=cmd_history_list)
+
+    p_hruns = sub.add_parser("history-runs", help="Execucoes de um job (pro docker-lab logs)")
+    p_hruns.add_argument("--name", required=True)
+    p_hruns.add_argument("--logs-dir", required=True, dest="logs_dir")
+    p_hruns.set_defaults(func=cmd_history_runs)
 
     args = parser.parse_args()
     args.func(args)

@@ -213,13 +213,14 @@ power.limit [W], power.default_limit [W]
 <span class="k">JOB_NAME</span>=<span class="v">{USERNAME}_treino</span></div></div>
       <div class="panel">
         <div class="ptabs"><span>PROBLEMS</span><span>OUTPUT</span><span class="on">TERMINAL</span></div>
-<pre class="term"><span class="pu">aluno@ainetmachine</span>:<span class="pp">~/meu_projeto</span>$ docker-lab run
+<pre class="term"><span class="pu">aluno@ainetmachine</span>:<span class="pp">~/meu_projeto</span>$ docker-lab run job.env
 == Buildando imagem (docker-lab-runner:latest) ==
 == Reservando recurso para 'aluno_treino' (cores=2 mem=4GB gpu=0 vram=2GB) ==
 == Reservado: cores do host = 0,1 ==
 == Rodando em segundo plano: /home/aluno/meu_projeto/venv/bin/python treino.py ==
    Container: docker-lab-aluno_treino
-   Log:       /opt/docker_lab/logs/aluno_treino.log   (acompanhe com: tail -f "/opt/docker_lab/logs/aluno_treino.log")
+   Log:       /opt/docker_lab/logs/aluno_treino_20260928_103005.log
+   Ver o log: docker-lab logs job.env
    Pra parar: docker-lab stop
 <span class="pu">aluno@ainetmachine</span>:<span class="pp">~/meu_projeto</span>$ </pre>
       </div>
@@ -230,8 +231,8 @@ power.limit [W], power.default_limit [W]
 <figcaption>Figura 2 — <code>job.env</code> aberto no editor e o job disparado pelo terminal integrado. Com vários arquivos (por exemplo <code>job_1.env</code>, <code>job_2.env</code>), use <code>docker-lab run job_1.env</code>.</figcaption>
 </figure>
 
-<h3>Passo 3 — Acompanhar: <code>docker-lab status</code> e o log</h3>
-<p><code>docker-lab status</code> mostra o que cada recurso tem em uso, o que ainda pode ser reservado dentro do teto da máquina e quais jobs estão ativos. O andamento do script fica no log.</p>
+<h3>Passo 3 — Acompanhar: <code>docker-lab status</code> e <code>docker-lab logs</code></h3>
+<p><code>docker-lab status</code> mostra o que cada recurso tem em uso, o que ainda pode ser reservado dentro do teto da máquina e quais jobs estão ativos. <code>docker-lab logs job.env</code> lista todas as execuções daquele <code>.env</code> (cada execução tem o próprio log, com data e hora no nome) e mostra as <b>últimas 50 linhas</b> da mais recente, junto com o caminho do log completo. Para ver outra execução, passe o número dela: <code>docker-lab logs job.env 1</code>.</p>
 
 <figure>
 <div class="vsc">
@@ -249,23 +250,33 @@ GPU 0 VRAM: 8GB em uso, 1GB ainda reserváveis (teto 80% = 9GB de 12GB totais)
 Jobs ativos:
   aluno_treino: cores=[0, 1] mem=4GB gpu=0 vram=2GB
   maria_bert: cores=[2, 3, 4, 5] mem=16GB gpu=0 vram=6GB
-<span class="pu">aluno@ainetmachine</span>:<span class="pp">~/meu_projeto</span>$ tail -f /opt/docker_lab/logs/aluno_treino.log
+<span class="pu">aluno@ainetmachine</span>:<span class="pp">~/meu_projeto</span>$ docker-lab logs job.env
+Execuções de 'aluno_treino' (job.env):
+    N  INICIO                FIM                   STATUS        SUGESTAO
+    1  2026-09-28T09:40:12   2026-09-28T09:40:20   sem RAM       aumente MEMORY_GB (pediu 1GB)
+    2  2026-09-28T10:30:05   -                     executando
+
+== Últimas 50 linhas do log da execução 2 ==
 Cores visíveis: [0, 1]
 época 1/3 concluída
 época 2/3 concluída
-<span class="dim">█</span></pre>
+
+== Log completo da execução 2: /opt/docker_lab/logs/aluno_treino_20260928_103005.log
+   Ver tudo:             less "/opt/docker_lab/logs/aluno_treino_20260928_103005.log"
+   Acompanhar ao vivo:   tail -f "/opt/docker_lab/logs/aluno_treino_20260928_103005.log"
+   Ver outra execução:   docker-lab logs job.env &lt;N&gt;</pre>
       </div>
     </div>
   </div>
   <div class="status"><span class="remote">&gt;&lt; SSH: ainetmachine</span><span>bash</span></div>
 </div>
-<figcaption>Figura 3 — Dois alunos dividindo a mesma GPU (TITAN V, 12 GB): cada um tem a sua fatia de VRAM, e a soma respeita o teto de 9 GB. O <code>Ctrl+C</code> sai do <code>tail</code> sem parar o job.</figcaption>
+<figcaption>Figura 3 — Dois alunos dividindo a mesma GPU (TITAN V, 12 GB): cada um tem a sua fatia de VRAM, e a soma respeita o teto de 9 GB. O <code>docker-lab logs</code> mostra a primeira tentativa, que faltou RAM, e o fim do log da execução atual.</figcaption>
 </figure>
 
 <div class="note ok">O job roda com o <b>seu usuário</b>: tudo o que o script gravar no projeto (resultados, modelos, logs) é seu, e você pode apagar ou editar sem <code>sudo</code>. Só instalar e desinstalar o docker_lab exige <code>sudo</code>.</div>
 
 <h3>Passo 4 — Parar um job e ver o histórico</h3>
-<p><code>docker-lab stop</code> lista os jobs ativos num menu numerado. Parar um job <b>encerra</b> a execução, que não pode ser retomada depois. A reserva é liberada sozinha. <code>docker-lab history</code> mostra todas as execuções com início, fim e status: <code>executando</code>, <code>executou</code>, <code>erro</code> ou <code>interrompido</code>.</p>
+<p><code>docker-lab stop</code> lista os jobs ativos num menu numerado. Parar um job <b>encerra</b> a execução, que não pode ser retomada depois. A reserva é liberada sozinha. <code>docker-lab history</code> mostra todas as execuções com início, fim e status: <code>executando</code>, <code>executou</code>, <code>erro</code>, <code>interrompido</code>, <code>sem RAM</code> ou <code>sem VRAM</code>. Nos dois últimos, a coluna <code>SUGESTAO</code> diz o que ajustar no <code>.env</code>.</p>
 
 <figure>
 <div class="vsc">
@@ -285,11 +296,12 @@ Parando 'docker-lab-aluno_treino'...
 docker-lab-aluno_treino
 Parado. A reserva é liberada sozinha em alguns instantes (o run.sh cuida disso).
 <span class="pu">aluno@ainetmachine</span>:<span class="pp">~/meu_projeto</span>$ docker-lab history
-JOB_NAME                                 USUARIO          INICIO               FIM                  STATUS
-------------------------------------------------------------------------------------------------------------------
-aluno_teste_cpu                          aluno            2026-09-28T09:12:40  2026-09-28T09:13:41  executou
-maria_bert                               maria            2026-09-28T10:02:11  -                    executando
-aluno_treino                             aluno            2026-09-28T10:30:05  2026-09-28T10:41:52  interrompido</pre>
+JOB_NAME              USUARIO   INICIO               FIM                  STATUS        SUGESTAO
+----------------------------------------------------------------------------------------------------------------
+aluno_teste_cpu       aluno     2026-09-28T09:12:40  2026-09-28T09:13:41  executou
+aluno_treino          aluno     2026-09-28T09:40:12  2026-09-28T09:40:20  sem RAM       aumente MEMORY_GB (pediu 1GB)
+maria_bert            maria     2026-09-28T10:02:11  -                    executando
+aluno_treino          aluno     2026-09-28T10:30:05  2026-09-28T10:41:52  interrompido</pre>
       </div>
     </div>
   </div>
@@ -376,8 +388,8 @@ Projeto no GitHub: https://github.com/lucas-mendonca-andrade/docker_lab
 <h3>Passar do limite do próprio job</h3>
 <table>
   <tr><th>Situação</th><th>O que acontece</th><th>O que fazer</th></tr>
-  <tr><td>O script usa mais RAM que <code>MEMORY_GB</code></td><td>O container é encerrado. O histórico mostra <code>erro</code>.</td><td>Aumentar <code>MEMORY_GB</code></td></tr>
-  <tr><td>O script usa mais VRAM que <code>GPU_MEMORY_GB</code></td><td>O script recebe <code>CUDA out of memory</code>, e só esse job é afetado.</td><td>Aumentar <code>GPU_MEMORY_GB</code> ou reduzir o batch size</td></tr>
+  <tr><td>O script usa mais RAM que <code>MEMORY_GB</code></td><td>O container é encerrado. O histórico mostra <code>sem RAM</code>, e o fim do log avisa o motivo.</td><td>Aumentar <code>MEMORY_GB</code></td></tr>
+  <tr><td>O script usa mais VRAM que <code>GPU_MEMORY_GB</code></td><td>O script recebe <code>CUDA out of memory</code>, e só esse job é afetado. Se ele terminar por isso, o histórico mostra <code>sem VRAM</code>.</td><td>Aumentar <code>GPU_MEMORY_GB</code> ou reduzir o batch size</td></tr>
   <tr><td>O script pede mais cores (ex. <code>n_jobs=-1</code>)</td><td>Ele só enxerga os cores reservados e roda com eles.</td><td>Nada: é o esperado</td></tr>
   <tr><td><code>JOB_NAME</code> já em uso por um job ativo</td><td>A execução é recusada.</td><td>Usar outro nome no <code>job.env</code></td></tr>
 </table>
@@ -391,8 +403,9 @@ sudo /opt/docker_lab/setup.sh
 sudo /opt/docker_lab/undo.sh</pre></div>
   <div class="card"><b>Aluno (na raiz do projeto)</b>
 <pre class="cmd" style="margin:4px 0 0">cp /opt/docker_lab/job.env.example job.env
-docker-lab run            <span class="c"># ou: docker-lab run outro.env</span>
+docker-lab run job.env
 docker-lab status
+docker-lab logs job.env         <span class="c"># fim do log + lista de execuções</span>
 docker-lab stop
 docker-lab history
 docker-lab corrigir-permissoes  <span class="c"># arquivos antigos com dono root</span></pre></div>
