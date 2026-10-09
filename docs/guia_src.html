@@ -232,7 +232,7 @@ power.limit [W], power.default_limit [W]
 </figure>
 
 <h3>Passo 3 — Acompanhar: <code>docker-lab status</code> e <code>docker-lab logs</code></h3>
-<p><code>docker-lab status</code> mostra o que cada recurso tem em uso, o que ainda pode ser reservado dentro do teto da máquina e quais jobs estão ativos. <code>docker-lab logs job.env</code> lista todas as execuções daquele <code>.env</code> (cada execução tem o próprio log, com data e hora no nome) e mostra as <b>últimas 50 linhas</b> da mais recente, junto com o caminho do log completo. Para ver outra execução, passe o número dela: <code>docker-lab logs job.env 1</code>. No lugar do <code>.env</code>, também dá para usar o nome do job que aparece no <code>docker-lab history</code> (ex.: <code>docker-lab logs aluno_treino</code>), o que permite ver o log de qualquer execução da lista.</p>
+<p><code>docker-lab status</code> mostra o que cada recurso tem em uso, o que ainda pode ser reservado dentro do teto da máquina e quais jobs estão ativos. <code>docker-lab logs job.env</code> lista todas as execuções daquele <code>.env</code> (cada execução tem o próprio log, com data e hora no nome) pergunta qual delas abrir (<code>Enter</code> abre a mais recente) e mostra as <b>últimas 50 linhas</b>, junto com o caminho do log completo. Para ver outra execução, passe o número dela: <code>docker-lab logs job.env 1</code>. No lugar do <code>.env</code>, também dá para usar o nome do job que aparece no <code>docker-lab history</code> (ex.: <code>docker-lab logs aluno_treino</code>), o que permite ver o log de qualquer execução da lista.</p>
 
 <figure>
 <div class="vsc">

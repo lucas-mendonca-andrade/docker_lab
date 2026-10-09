@@ -95,7 +95,7 @@ n_estimators=100: acurácia=0.960
    Ver tudo:             less "/opt/docker_lab/logs/aluno_treino_20261008_103005.log"
    Acompanhar ao vivo:   tail -f "/opt/docker_lab/logs/aluno_treino_20261008_103005.log"
    Ver outra execução:   docker-lab logs job.env &lt;N&gt;</pre>
-<p>Cada execução guarda o próprio log. <code>docker-lab logs job.env</code> lista todas as execuções desse <code>.env</code> e mostra as <b>últimas 50 linhas</b> da mais recente. Para ver outra, passe o número: <code>docker-lab logs job.env 1</code>. Também aceita o nome do job, como aparece no <code>docker-lab history</code>: <code>docker-lab logs aluno_treino</code>.</p>
+<p>Cada execução guarda o próprio log. <code>docker-lab logs job.env</code> lista todas as execuções desse <code>.env</code>, pergunta qual abrir (<code>Enter</code> abre a mais recente) e mostra as <b>últimas 50 linhas</b> dela. Para ver outra, passe o número: <code>docker-lab logs job.env 1</code>. Também aceita o nome do job, como aparece no <code>docker-lab history</code>: <code>docker-lab logs aluno_treino</code>.</p>
 
 <h2>5. Parar</h2>
 <pre><span class="p">aluno@servidor</span>:<span class="d">~/meu_projeto</span>$ docker-lab stop

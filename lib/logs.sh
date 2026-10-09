@@ -56,6 +56,20 @@ for i in "${!RUNS[@]}"; do
 done
 
 TOTAL=${#RUNS[@]}
+# Sem N na linha de comando e com mais de uma execução: pergunta qual abrir (Enter = a
+# mais recente). Fora de um terminal (ex. saída redirecionada), abre a mais recente.
+if [[ -z "$ESCOLHA" && $TOTAL -gt 1 && -t 0 ]]; then
+    echo
+    while true; do
+        read -r -p "Qual execução abrir? [1-$TOTAL, Enter = $TOTAL (mais recente), q = sair]: " ESCOLHA || exit 0
+        [[ "$ESCOLHA" == "q" ]] && exit 0
+        ESCOLHA="${ESCOLHA:-$TOTAL}"
+        if [[ "$ESCOLHA" =~ ^[0-9]+$ ]] && (( ESCOLHA >= 1 && ESCOLHA <= TOTAL )); then
+            break
+        fi
+        echo "Opção inválida, digite um número de 1 a $TOTAL."
+    done
+fi
 N="${ESCOLHA:-$TOTAL}"
 if ! [[ "$N" =~ ^[0-9]+$ ]] || (( N < 1 || N > TOTAL )); then
     echo >&2
@@ -65,8 +79,10 @@ fi
 LOG="${LOGS[$((N - 1))]}"
 
 echo
-if [[ "$LOG" == "-" || ! -f "$LOG" ]]; then
+if [[ "$LOG" == "-" ]]; then
     echo "O log da execução $N não está disponível (antes, cada execução sobrescrevia o log da anterior)."
+elif [[ ! -f "$LOG" ]]; then
+    echo "O arquivo de log da execução $N foi apagado: $LOG"
 else
     echo "== Últimas $LINHAS linhas do log da execução $N =="
     tail -n "$LINHAS" "$LOG"
