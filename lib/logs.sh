@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# docker-lab logs [arquivo.env] [N]
+# docker-lab logs [arquivo.env | nome_do_job] [N]
 #
-# Lista todas as execuções do job descrito no arquivo .env (cada uma tem o próprio log,
-# com data e hora no nome) e mostra as últimas 50 linhas do log da execução N — por
-# padrão, a mais recente. Também diz onde ver o log inteiro.
+# Lista todas as execuções de um job (cada uma tem o próprio log, com data e hora no
+# nome) e mostra as últimas 50 linhas do log da execução N — por padrão, a mais
+# recente. Também diz onde ver o log inteiro. O job pode ser indicado pelo arquivo .env
+# (lê o JOB_NAME dele) ou direto pelo nome que aparece no 'docker-lab history' — assim
+# dá pra ver o log de qualquer execução da lista, inclusive de outros usuários.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
@@ -13,31 +15,38 @@ HISTORY_LOCK="$HERE/state/history.lock"
 HISTORY_FILE="$HERE/state/history.json"
 LINHAS=50
 
-ENV_FILE="${1:-job.env}"
+ALVO="${1:-job.env}"
 ESCOLHA="${2:-}"
-if [[ ! -f "$ENV_FILE" ]]; then
-    echo "Arquivo não encontrado: $ENV_FILE" >&2
-    echo "Uso: docker-lab logs <arquivo.env> [número da execução]" >&2
-    exit 1
-fi
 
-# Mesmo JOB_NAME que o run.sh usa: lê o .env do jeito que o run.sh lê (source) e troca
-# o {USERNAME} pelo usuário real.
-JOB_NAME="$(set +eu; set -a; source "$ENV_FILE" >/dev/null 2>&1; printf '%s' "${JOB_NAME:-}")"
-if [[ -z "$JOB_NAME" ]]; then
-    echo "O arquivo $ENV_FILE não define JOB_NAME." >&2
-    exit 1
+if [[ -f "$ALVO" ]]; then
+    # Mesmo JOB_NAME que o run.sh usa: lê o .env do jeito que o run.sh lê (source) e
+    # troca o {USERNAME} pelo usuário real.
+    JOB_NAME="$(set +eu; set -a; source "$ALVO" >/dev/null 2>&1; printf '%s' "${JOB_NAME:-}")"
+    if [[ -z "$JOB_NAME" ]]; then
+        echo "O arquivo $ALVO não define JOB_NAME." >&2
+        exit 1
+    fi
+    JOB_NAME="${JOB_NAME//\{USERNAME\}/$(id -un)}"
+else
+    # Não é um arquivo: trata como o nome do job (coluna JOB_NAME do history). Aceita
+    # também com ".env" no fim, por engano comum.
+    JOB_NAME="${ALVO%.env}"
 fi
-JOB_NAME="${JOB_NAME//\{USERNAME\}/$(id -un)}"
 
 mapfile -t RUNS < <(flock "$HISTORY_LOCK" "$HOST_PYTHON" "$HERE/lib/reserve.py" \
     --history "$HISTORY_FILE" history-runs --name "$JOB_NAME" --logs-dir "$HERE/logs")
 if [[ ${#RUNS[@]} -eq 0 ]]; then
-    echo "Nenhuma execução de '$JOB_NAME' no histórico ainda."
-    exit 0
+    if [[ -f "$ALVO" ]]; then
+        echo "Nenhuma execução de '$JOB_NAME' no histórico ainda."
+        exit 0
+    fi
+    echo "Não achei '$ALVO': não é um arquivo nesta pasta nem um job do 'docker-lab history'." >&2
+    echo "Uso: docker-lab logs <arquivo.env | nome_do_job> [número da execução]" >&2
+    echo "     (o nome do job é a coluna JOB_NAME do 'docker-lab history')" >&2
+    exit 1
 fi
 
-echo "Execuções de '$JOB_NAME' ($ENV_FILE):"
+echo "Execuções de '$JOB_NAME':"
 printf '  %3s  %-20s  %-20s  %-13s %s\n' "N" "INICIO" "FIM" "STATUS" "SUGESTAO"
 LOGS=()
 for i in "${!RUNS[@]}"; do
@@ -66,4 +75,4 @@ else
     echo "   Ver tudo:             less \"$LOG\""
     echo "   Acompanhar ao vivo:   tail -f \"$LOG\""
 fi
-echo "   Ver outra execução:   docker-lab logs $ENV_FILE <N>"
+echo "   Ver outra execução:   docker-lab logs $ALVO <N>"

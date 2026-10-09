@@ -13,9 +13,10 @@ Uso:
   docker-lab status          mostra recursos em uso e livres
   docker-lab stop            para um job ativo (menu)
   docker-lab history         mostra o histórico de execuções
-  docker-lab logs [job.env] [N]
+  docker-lab logs [job.env | nome_do_job] [N]
                              lista as execuções desse job e mostra o fim do log
-                             (padrão: a mais recente; N escolhe outra)
+                             (padrão: a mais recente; N escolhe outra). O nome do
+                             job é a coluna JOB_NAME do 'docker-lab history'.
   docker-lab corrigir-permissoes [pasta]
                              devolve pra você arquivos com dono root na sua pasta
                              (sobra de jobs antigos; padrão: pasta atual)

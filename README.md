@@ -57,6 +57,7 @@ docker-lab run job.env       # executa o job em segundo plano (padrão: job.env)
 docker-lab status            # recursos em uso e livres
 docker-lab logs job.env      # lista as execuções desse job e mostra as últimas 50 linhas do log
 docker-lab logs job.env 2    # o log de outra execução (pelo número da lista)
+docker-lab logs fulano_treino  # também aceita o nome do job (coluna JOB_NAME do history)
 docker-lab stop              # para um job ativo (menu)
 docker-lab history           # histórico de execuções de todos os usuários
 ```
