@@ -168,6 +168,14 @@ def used_vram_gb(state, gpu):
     )
 
 
+class AcquireError(Exception):
+    """Pedido de reserva recusado: mensagem pro usuario + codigo de saida da CLI."""
+
+    def __init__(self, message, code):
+        super().__init__(message)
+        self.code = code
+
+
 def pick_free_cores(count, state):
     """Escolhe os `count` cores livres de menor numero, sem deixar o total reservado
     (somando todos os jobs) passar do teto de MAX_UTILIZATION. O script rodando dentro
@@ -176,86 +184,102 @@ def pick_free_cores(count, state):
     try:
         count = int(count)
     except ValueError:
-        print(f"CORES inválido: '{count}' (esperado um número, ex.: 2).", file=sys.stderr)
-        sys.exit(2)
+        raise AcquireError(f"CORES inválido: '{count}' (esperado um número, ex.: 2).", 2)
     if count <= 0:
-        print("CORES precisa ser >= 1.", file=sys.stderr)
-        sys.exit(2)
+        raise AcquireError("CORES precisa ser >= 1.", 2)
 
     total = total_cores()
     cap = resource_cap(total)
     used = used_cores(state)
     if len(used) + count > cap:
-        print(
+        raise AcquireError(
             f"Pedido de {count} core(s) ultrapassaria o teto de {int(MAX_UTILIZATION * 100)}% "
             f"da máquina: já {len(used)} em uso, limite é {cap} de {total} cores totais "
             f"(sempre sobra pelo menos {total - cap} core(s) livre).",
-            file=sys.stderr,
+            2,
         )
-        sys.exit(2)
 
     free = sorted(set(range(total)) - used)
     return free[:count]
 
 
-def cmd_acquire(args):
-    state = read_state(args.state)
-    reap(state)
-
-    if args.name in state["jobs"]:
-        print(
-            f"Job '{args.name}' já tem uma reserva ativa (container "
-            f"'{CONTAINER_PREFIX}{args.name}' rodando). Escolha outro JOB_NAME, ou espere "
+def acquire_job(state, name, cores, mem, gpu, gpu_mem):
+    """Reserva cores/RAM/VRAM pro job `name` no `state` (sem gravar o arquivo) e devolve
+    os IDs dos cores escolhidos. Levanta AcquireError se o pedido nao couber no teto.
+    Usado pela CLI 'acquire' e pelo escalonador da fila (lib/scheduler.py)."""
+    if name in state["jobs"]:
+        raise AcquireError(
+            f"Job '{name}' já tem uma reserva ativa (container "
+            f"'{CONTAINER_PREFIX}{name}' rodando). Escolha outro JOB_NAME, ou espere "
             "esse terminar.",
-            file=sys.stderr,
+            1,
         )
-        sys.exit(1)
 
-    cores = pick_free_cores(args.cores, state)
+    chosen = pick_free_cores(cores, state)
 
     total_mem = total_mem_gb()
     mem_cap = resource_cap(total_mem, MEMORY_MAX_UTILIZATION)
     used_mem = used_mem_gb(state)
-    if used_mem + args.mem > mem_cap:
-        print(
-            f"Pedido de {args.mem}GB ultrapassaria o teto de {int(MEMORY_MAX_UTILIZATION * 100)}% "
+    if used_mem + mem > mem_cap:
+        raise AcquireError(
+            f"Pedido de {mem}GB ultrapassaria o teto de {int(MEMORY_MAX_UTILIZATION * 100)}% "
             f"da máquina: já {used_mem}GB em uso, limite é {mem_cap}GB de {total_mem}GB "
             f"totais (sempre sobra pelo menos {total_mem - mem_cap}GB livre).",
-            file=sys.stderr,
+            3,
         )
-        sys.exit(3)
 
-    gpu = args.gpu if args.gpu and args.gpu != "none" else None
-    gpu_mem = 0
+    gpu = gpu if gpu and gpu != "none" else None
+    vram = 0
     if gpu is not None:
         inventory = gpu_inventory()
         if gpu not in inventory:
-            print(
+            raise AcquireError(
                 f"GPU '{gpu}' não existe nesta máquina (disponíveis: {sorted(inventory) or 'nenhuma'}).",
-                file=sys.stderr,
+                4,
             )
-            sys.exit(4)
-        gpu_mem = args.gpu_mem
-        if gpu_mem is None or gpu_mem <= 0:
-            print("Com GPU definida, GPU_MEMORY_GB (>= 1) é obrigatório no job.env.",
-                  file=sys.stderr)
-            sys.exit(2)
+        vram = gpu_mem
+        if vram is None or vram <= 0:
+            raise AcquireError("Com GPU definida, GPU_MEMORY_GB (>= 1) é obrigatório no job.env.", 2)
         total_vram = inventory[gpu]
         cap_vram = resource_cap(total_vram)
         used_vram = used_vram_gb(state, gpu)
-        if used_vram + gpu_mem > cap_vram:
-            print(
-                f"Pedido de {gpu_mem}GB de VRAM na GPU {gpu} ultrapassaria o teto de "
+        if used_vram + vram > cap_vram:
+            raise AcquireError(
+                f"Pedido de {vram}GB de VRAM na GPU {gpu} ultrapassaria o teto de "
                 f"{int(MAX_UTILIZATION * 100)}%: já {used_vram}GB em uso, limite é "
                 f"{cap_vram}GB de {total_vram:.0f}GB totais.",
-                file=sys.stderr,
+                5,
             )
-            sys.exit(5)
 
-    state["jobs"][args.name] = {
-        "cores": cores, "memory_gb": args.mem, "gpu": gpu,
-        "gpu_memory_gb": gpu_mem, "reserved_at": time.time(),
+    state["jobs"][name] = {
+        "cores": chosen, "memory_gb": mem, "gpu": gpu,
+        "gpu_memory_gb": vram, "reserved_at": time.time(),
     }
+    return chosen
+
+
+def machine_capacity():
+    """Totais e tetos da maquina por recurso: {"cores": (total, teto), "memory_gb":
+    (total, teto), "vram": {gpu: (total, teto)}}."""
+    total_c = total_cores()
+    total_m = total_mem_gb()
+    return {
+        "cores": (total_c, resource_cap(total_c)),
+        "memory_gb": (total_m, resource_cap(total_m, MEMORY_MAX_UTILIZATION)),
+        "vram": {
+            gpu: (total, resource_cap(total)) for gpu, total in gpu_inventory().items()
+        },
+    }
+
+
+def cmd_acquire(args):
+    state = read_state(args.state)
+    reap(state)
+    try:
+        cores = acquire_job(state, args.name, args.cores, args.mem, args.gpu, args.gpu_mem)
+    except AcquireError as err:
+        print(str(err), file=sys.stderr)
+        sys.exit(err.code)
     write_state(args.state, state)
     # stdout: so os cores confirmados, pro run.sh usar direto em --cpuset-cpus
     print(",".join(str(c) for c in cores))
@@ -333,23 +357,39 @@ def write_history(history_path, history):
     os.replace(tmp, history_path)
 
 
-def cmd_history_start(args):
-    history = read_history(args.history)
-    run_id = f"{args.name}@{_now_iso()}"
+def history_start(history_path, name, user, script, log=None, memory_gb=None,
+                  gpu_memory_gb=None):
+    """Registra o inicio de uma execucao no historico e devolve o run_id dela."""
+    history = read_history(history_path)
+    run_id = f"{name}@{_now_iso()}"
     history["runs"].append({
         "run_id": run_id,
-        "job_name": args.name,
-        "user": args.user,
-        "script": args.script,
+        "job_name": name,
+        "user": user,
+        "script": script,
         "started_at": _now_iso(),
         "ended_at": None,
         "status": "executando",
         "exit_code": None,
-        "log": args.log,
-        "memory_gb": args.memory_gb,
-        "gpu_memory_gb": args.gpu_memory_gb,
+        "log": log,
+        "memory_gb": memory_gb,
+        "gpu_memory_gb": gpu_memory_gb,
     })
-    write_history(args.history, history)
+    write_history(history_path, history)
+    return run_id
+
+
+def find_run(history_path, run_id):
+    """Registro de historico de uma execucao (ou None)."""
+    for run in read_history(history_path)["runs"]:
+        if run["run_id"] == run_id:
+            return run
+    return None
+
+
+def cmd_history_start(args):
+    run_id = history_start(args.history, args.name, args.user, args.script, args.log,
+                           args.memory_gb, args.gpu_memory_gb)
     print(run_id)  # stdout: run.sh guarda isso pra passar pro history-finish depois
 
 

@@ -9,11 +9,11 @@
 # 1. Le a config (job.env).
 # 2. Builda a imagem generica deste docker_lab/ (rapido depois da 1a vez, o Docker
 #    cacheia as camadas que nao mudaram).
-# 3. Reserva os cores/memoria/VRAM de GPU pedidos (sob flock, ver lib/reserve.py) — recusa na
-#    hora se ja estiver em uso por outro job, em vez de estourar a maquina. Tudo isso
-#    (1-3) acontece NA HORA, na tela — se der erro, voce fica sabendo na hora.
-# 4. Sobe o container em SEGUNDO PLANO (nohup, sobrevive a fechar o terminal) e volta o
-#    prompt pra voce imediatamente — o log vai pra docker_lab/logs/<job>.log.
+# 3. Prepara o script de execucao e ENFILEIRA o experimento (lib/queue_db.py). Quem
+#    decide quando ele inicia e o escalonador (lib/scheduler.py, servico
+#    docker_lab-scheduler): FIFO com backfill. Ao iniciar, o escalonador reserva os
+#    cores/RAM/VRAM e sobe o container em segundo plano como voce.
+# 4. Mostra a posicao na fila (ou que ja iniciou) e volta o prompt.
 # 5. A reserva e liberada sozinha quando o container termina (sucesso, erro, ou
 #    docker-lab stop) — nao precisa fazer nada.
 set -euo pipefail
@@ -57,6 +57,14 @@ set -a; source "$JOB_ENV"; set +a
 : "${GPU:=none}"
 : "${GPU_MEMORY_GB:=0}"
 : "${PYTHON_BIN:=python3}"
+if [[ -z "${NOTIFY_EMAIL:-}" ]]; then
+    echo "Defina NOTIFY_EMAIL no $JOB_ENV (seu e-mail, para os avisos da fila). Ver job.env.example." >&2
+    exit 1
+fi
+if [[ -z "${ESTIMATED_RUNTIME_HOURS:-}" ]]; then
+    echo "Defina ESTIMATED_RUNTIME_HOURS no $JOB_ENV (tempo estimado em horas, ex.: 1.5). Ver job.env.example." >&2
+    exit 1
+fi
 
 # REPO_ROOT: raiz do projeto de quem esta rodando (onde SCRIPT/PYTHON_BIN vao ser
 # resolvidos e o que sera montado no container). Auto-detectado como a pasta onde o
@@ -205,24 +213,11 @@ if [[ ${#EXTERNAL_PREFIXES[@]} -gt 0 ]]; then
     fi
 fi
 
-GPU_DESC="gpu=$GPU"
-if [[ "$GPU" != "none" ]]; then
-    GPU_DESC+=" vram=${GPU_MEMORY_GB}GB"
-fi
-echo "== Reservando recurso para '$JOB_NAME' (cores=$CORES mem=${MEMORY_GB}GB $GPU_DESC) =="
-if ! ALLOC_CORES=$(flock "$LOCK_FILE" "$HOST_PYTHON" "$HERE/lib/reserve.py" --state "$STATE_FILE" \
-        acquire --name "$JOB_NAME" --cores "$CORES" --mem "$MEMORY_GB" --gpu "$GPU" \
-        --gpu-mem "$GPU_MEMORY_GB"); then
-    echo "== Não foi possível reservar recurso — veja a mensagem acima. Rode docker-lab status para ver o que está em uso. ==" >&2
-    exit 1
-fi
-echo "== Reservado: cores do host = $ALLOC_CORES =="
-
 CONTAINER_NAME="docker-lab-${JOB_NAME}"
 # Um log POR EXECUCAO (data/hora no nome) — rodar de novo nao apaga o log anterior.
 # 'docker-lab logs <arquivo.env>' lista e mostra esses logs.
 LOG_FILE="$LOGS_DIR/${JOB_NAME}_$(date +%Y%m%d_%H%M%S).log"
-RUNNER_SCRIPT="$STATE_DIR/${JOB_NAME}.runner.sh"
+RUNNER_SCRIPT="$STATE_DIR/${JOB_NAME}_$(date +%Y%m%d_%H%M%S).runner.sh"
 # Marcador que o stop.sh cria ANTES de mandar 'docker stop' — o trap abaixo confere se
 # ele existe pra saber se o fim do container foi um stop deliberado (status
 # "interrompido") em vez de um erro de verdade (o exit code sozinho nao distingue os
@@ -230,13 +225,6 @@ RUNNER_SCRIPT="$STATE_DIR/${JOB_NAME}.runner.sh"
 # tambem por seguranca, caso tenha sobrado de uma execucao anterior com o mesmo nome.
 STOP_MARKER="$STATE_DIR/${JOB_NAME}.stop_requested"
 rm -f "$STOP_MARKER"
-
-# Registra o inicio no historico (docker_lab/history.sh le isso depois) — so agora,
-# porque so a partir daqui o job foi de fato aceito (recurso reservado). Um pedido
-# recusado por falta de recurso nunca chega a "executar", entao nao entra no historico.
-RUN_ID=$(flock "$HISTORY_LOCK" "$HOST_PYTHON" "$HERE/lib/reserve.py" --history "$HISTORY_FILE" \
-    history-start --name "$JOB_NAME" --user "$REAL_USER" --script "$SCRIPT" \
-    --log "$LOG_FILE" --memory-gb "$MEMORY_GB" --gpu-memory-gb "$GPU_MEMORY_GB")
 
 # GPU: o container so enxerga a GPU pedida (--gpus), e o HAMi-core (libvgpu.so, ver
 # Dockerfile), carregado via LD_PRELOAD em todo processo do container, limita a VRAM ao
@@ -268,10 +256,11 @@ fi
 # nao ha mais motivo pra forcar outro valor.
 HOME_MOUNT_ARGS=(-v "$HOME":"$HOME")
 
-# O container em si roda num script gerado aqui (nao direto neste processo), pra poder
-# ser disparado com nohup e sobreviver ao ./run.sh terminar/ao terminal fechar. Esse
-# script e quem libera a reserva (trap EXIT), quando o container terminar por qualquer
-# motivo — sucesso, erro, ou 'docker stop' via docker-lab stop.
+# O container em si roda num script gerado aqui, que o ESCALONADOR dispara (como voce, via
+# runuser) quando for a vez do experimento — passando ALLOC_CORES (cores reservados) e
+# RUN_ID (registro no historico), que so existem nessa hora. Esse script e quem libera
+# a reserva (trap EXIT), quando o container terminar por qualquer motivo — sucesso,
+# erro, ou 'docker stop' via docker-lab stop.
 #
 # Monta o repo no MESMO caminho absoluto que ele tem no host (nao em /workspace): varios
 # venvs de framework deste projeto (ex. frameworks/AutoGluon/venv) tem link simbolico
@@ -321,13 +310,14 @@ elif [[ "\$EC" -ne 0 ]] && grep -qE "HAMI-core ERROR.*OOM|CUDA out of memory|CUD
 fi
 docker rm "$CONTAINER_NAME" >/dev/null 2>&1
 flock "$LOCK_FILE" "$HOST_PYTHON" "$HERE/lib/reserve.py" --state "$STATE_FILE" release --name "$JOB_NAME"
-flock "$HISTORY_LOCK" "$HOST_PYTHON" "$HERE/lib/reserve.py" --history "$HISTORY_FILE" history-finish --run-id "$RUN_ID" --exit-code "\$EC" "\${FINISH_ARGS[@]}"
+flock "$HISTORY_LOCK" "$HOST_PYTHON" "$HERE/lib/reserve.py" --history "$HISTORY_FILE" history-finish --run-id "\$RUN_ID" --exit-code "\$EC" "\${FINISH_ARGS[@]}"
 rm -f "$RUNNER_SCRIPT"
+touch "$STATE_DIR/queue.wake"
 ' EXIT
 docker rm "$CONTAINER_NAME" >/dev/null 2>&1
 docker run \\
     --name "$CONTAINER_NAME" \\
-    --cpuset-cpus="$ALLOC_CORES" \\
+    --cpuset-cpus="\$ALLOC_CORES" \\
     --memory="${MEMORY_GB}g" \\
     --memory-swap="${MEMORY_GB}g" \\
     --user "$(id -u):$(id -g)" \\
@@ -346,14 +336,15 @@ docker run \\
 EOF
 chmod +x "$RUNNER_SCRIPT"
 
-# Nota: "cmd & " quase nunca falha em si (so no caso raro de o fork() do SO falhar) —
-# erros reais (ex. docker run falhando de verdade) sao capturados pelo `trap` DENTRO do
-# $RUNNER_SCRIPT (exit code != 0 -> history "erro"), nao aqui.
-nohup "$RUNNER_SCRIPT" > "$LOG_FILE" 2>&1 &
-disown
-
-echo "== Rodando em segundo plano: $CONTAINER_PYTHON_BIN $SCRIPT =="
-echo "   Container: $CONTAINER_NAME"
-echo "   Log:       $LOG_FILE"
-echo "   Ver o log: docker-lab logs $JOB_ENV      (acompanhar ao vivo: tail -f \"$LOG_FILE\")"
-echo "   Pra parar: docker-lab stop"
+echo "== Enfileirando '$JOB_NAME' (cores=$CORES mem=${MEMORY_GB}GB gpu=$GPU$([[ "$GPU" != "none" ]] && echo " vram=${GPU_MEMORY_GB}GB")) =="
+if ! QUEUE_ID=$("$HOST_PYTHON" "$HERE/lib/queue_db.py" enqueue \
+        --job-name "$JOB_NAME" --user "$REAL_USER" --email "$NOTIFY_EMAIL" \
+        --estimated "$ESTIMATED_RUNTIME_HOURS" --script "$SCRIPT" \
+        --env-file "$(cd "$(dirname "$JOB_ENV")" && pwd)/$(basename "$JOB_ENV")" \
+        --cores "$CORES" --mem "$MEMORY_GB" --gpu "$GPU" --gpu-mem "$GPU_MEMORY_GB" \
+        --runner "$RUNNER_SCRIPT" --log "$LOG_FILE"); then
+    rm -f "$RUNNER_SCRIPT"
+    echo "== Experimento NÃO enfileirado — veja a mensagem acima. ==" >&2
+    exit 1
+fi
+"$HOST_PYTHON" "$HERE/lib/queue_db.py" report --id "$QUEUE_ID"

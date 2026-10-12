@@ -59,29 +59,49 @@ venv/bin/pip install -r requirements.txt</pre>
 <span class="k">MEMORY_GB</span>=<span class="p">4</span>                   <span class="c"># RAM máxima (passou disso, o job é encerrado)</span>
 <span class="k">GPU</span>=<span class="s">none</span>                      <span class="c"># "none" sem GPU, ou "0" para usar a GPU 0</span>
 <span class="c">#GPU_MEMORY_GB=8              # VRAM máxima: obrigatório quando GPU=0</span>
-<span class="k">JOB_NAME</span>=<span class="s">{USERNAME}_treino</span>    <span class="c"># mantenha o {USERNAME}_, troque só o resto</span></pre>
+<span class="k">JOB_NAME</span>=<span class="s">{USERNAME}_treino</span>    <span class="c"># mantenha o {USERNAME}_, troque só o resto</span>
+<span class="k">NOTIFY_EMAIL</span>=<span class="s">aluno@gmail.com</span>      <span class="c"># obrigatório: avisos da fila por e-mail</span>
+<span class="k">ESTIMATED_RUNTIME_HOURS</span>=<span class="p">1.5</span>     <span class="c"># obrigatório: tempo estimado, em horas</span></pre>
 
-<h2>3. Rodar</h2>
-<p>Dentro da pasta do projeto. O job vai para segundo plano, e você pode fechar o terminal.</p>
+<h2>3. Rodar (entra na fila)</h2>
+<p>Dentro da pasta do projeto. O experimento entra na <b>fila</b> e inicia sozinho quando houver recursos, como você, em segundo plano. Você pode fechar o terminal.</p>
 <pre><span class="p">aluno@servidor</span>:<span class="d">~/meu_projeto</span>$ docker-lab run job.env
 == Buildando imagem (docker-lab-runner:latest) ==
-== Reservando recurso para 'aluno_treino' (cores=2 mem=4GB gpu=none) ==
-== Reservado: cores do host = 0,1 ==
-== Rodando em segundo plano: /home/aluno/meu_projeto/venv/bin/python treino.py ==
-   Container: docker-lab-aluno_treino
-   Log:       /opt/docker_lab/logs/aluno_treino_20261008_103005.log
-   Ver o log: docker-lab logs job.env
-   Pra parar: docker-lab stop</pre>
+== Enfileirando 'aluno_treino' (cores=2 mem=4GB gpu=none) ==
+== Experimento #14 (aluno_treino) entrou na fila ==
+   Situação:    aguardando na fila — posição 2 de 3
+   Estimativa:  informada 1h30m, corrigida 2h00m (sua margem atual: +30m)
+   E-mails:     você receberá avisos em aluno@gmail.com (próximo da fila, início, fim)
+   Ver o log:   docker-lab logs aluno_treino
+Use "docker-lab queue" para acompanhar a fila</pre>
+<p>Se houver recursos livres, aparece <code>Situação: INICIOU IMEDIATAMENTE</code>. A <b>estimativa corrigida</b> é a sua estimativa mais a média dos seus erros anteriores (tempo real − estimado). Estimar bem ajuda seus jobs curtos a passarem na frente quando o primeiro da fila ainda não cabe.</p>
 
-<h2>4. Acompanhar: status e log</h2>
-<pre><span class="p">aluno@servidor</span>:<span class="d">~/meu_projeto</span>$ docker-lab status
-Cores: 2 em uso, 10 ainda reserváveis (teto 80% = 12 de 16 totais) — livres de verdade: [2, 3, ..., 15]
-Memória: 4GB em uso, 54GB ainda reserváveis (teto 95% = 58GB de 62GB totais)
+<h2>4. A fila</h2>
+<pre style="font-size:6.9pt"><span class="p">aluno@servidor</span>:<span class="d">~/meu_projeto</span>$ docker-lab queue
+EM EXECUÇÃO
+    USUÁRIO                  EXPERIMENTO  CORES/RAM/VRAM        ESTIMADO  CORRIGIDO  RODANDO HÁ  RESTANTE    
+    -----------------------  -----------  --------------------  --------  ---------  ----------  ------------
+    maria &lt;maria@gmail.com&gt;  maria_bert   8c / 32GB / GPU0 6GB  4h00m     4h30m      1h10m       3h20m       
+    jose (legado)            jose_antigo  4c / 16GB / -         -         -          2h05m       desconhecido
 
-Jobs ativos:
-  aluno_treino: cores=[0, 1] mem=4GB
+NA FILA
+    POS  USUÁRIO                  EXPERIMENTO   CORES/RAM/VRAM  ESTIMADO  CORRIGIDO  ESPERANDO HÁ
+    ---  -----------------------  ------------  --------------  --------  ---------  ------------
+    1    ana &lt;ana@gmail.com&gt;      ana_grande    12c / 64GB / -  6h00m     6h00m      20m         
+ ➜  2    aluno &lt;aluno@gmail.com&gt;  aluno_treino  2c / 4GB / -    1h30m     2h00m      1m          
 
-<span class="p">aluno@servidor</span>:<span class="d">~/meu_projeto</span>$ docker-lab logs job.env
+RESUMO DA MÁQUINA
+    RECURSO          TOTAL  TETO  EM USO  LIVRE
+    ---------------  -----  ----  ------  -----
+    Cores            16     12    12      0    
+    RAM (GB)         62     58    48      10   
+    VRAM GPU 0 (GB)  12     9     6       3    
+
+➜ = seus experimentos. Para cancelar ou parar: docker-lab stop</pre>
+<p><code>➜</code> marca os seus. <code>legado</code> é um job iniciado antes da fila existir: ele ocupa recursos, mas o tempo restante é desconhecido. <code>excedido</code> no RESTANTE indica um job que já passou da estimativa corrigida.</p>
+
+<h2>5. Acompanhar o log</h2>
+<pre><span class="p">aluno@servidor</span>:<span class="d">~/meu_projeto</span>$ docker-lab logs job.env
 Execuções de 'aluno_treino' (job.env):
     N  INICIO                FIM                   STATUS        SUGESTAO
     1  2026-10-08T10:02:11   2026-10-08T10:02:15   sem RAM       aumente MEMORY_GB (pediu 1GB)
@@ -97,17 +117,17 @@ n_estimators=100: acurácia=0.960
    Ver outra execução:   docker-lab logs job.env &lt;N&gt;</pre>
 <p>Cada execução guarda o próprio log. <code>docker-lab logs job.env</code> lista todas as execuções desse <code>.env</code>, pergunta qual abrir (<code>Enter</code> abre a mais recente) e mostra as <b>últimas 50 linhas</b> dela. Para ver outra, passe o número: <code>docker-lab logs job.env 1</code>. Também aceita o nome do job, como aparece no <code>docker-lab history</code>: <code>docker-lab logs aluno_treino</code>.</p>
 
-<h2>5. Parar</h2>
+<h2>6. Parar ou cancelar</h2>
 <pre><span class="p">aluno@servidor</span>:<span class="d">~/meu_projeto</span>$ docker-lab stop
-Jobs ativos:
-1) aluno_treino (cores=[0, 1] mem=4GB)
-2) Cancelar
-Qual você quer parar (número, ou 'Cancelar')? 1
-Parando 'docker-lab-aluno_treino'...
-Parado. A reserva é liberada sozinha em alguns instantes.</pre>
-<p>Parar <b>encerra</b> o job: não é possível retomá-lo depois.</p>
+Jobs em execução e na fila:
+1) maria_bert (cores=[0, ..., 7] mem=32GB gpu=0 vram=6GB) — EM EXECUÇÃO
+2) aluno_treino — NA FILA (posição 2, de aluno, cores=2 mem=4GB)
+3) Sair
+Qual você quer parar/cancelar (número, ou 'Sair')? 2
+Cancelado: o experimento saiu da fila (se submeter de novo, entra no fim).</pre>
+<p>Parar um job em execução <b>encerra</b> o job: não é possível retomá-lo depois. Cancelar um job da fila faz ele <b>perder o lugar</b>.</p>
 
-<h2>6. Histórico</h2>
+<h2>7. Histórico</h2>
 <pre style="font-size:7.1pt"><span class="p">aluno@servidor</span>:<span class="d">~/meu_projeto</span>$ docker-lab history
 JOB_NAME          USUARIO  INICIO               FIM                  STATUS        SUGESTAO
 -------------------------------------------------------------------------------------------------------------

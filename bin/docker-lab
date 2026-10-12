@@ -9,9 +9,10 @@ HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 uso() {
     cat >&2 <<USO
 Uso:
-  docker-lab run [job.env]   roda o job (padrão: job.env da pasta atual)
+  docker-lab run [job.env]   coloca o job na fila (padrão: job.env da pasta atual)
+  docker-lab queue           mostra a fila: em execução, aguardando e recursos
   docker-lab status          mostra recursos em uso e livres
-  docker-lab stop            para um job ativo (menu)
+  docker-lab stop            para um job em execução ou cancela um da fila (menu)
   docker-lab history         mostra o histórico de execuções
   docker-lab logs [job.env | nome_do_job] [N]
                              lista as execuções desse job e mostra o fim do log
@@ -26,6 +27,7 @@ USO
 case "${1:-}" in
     run)     exec "$HERE/run.sh" "${2:-job.env}" ;;
     status)  exec "$HERE/status.sh" ;;
+    queue)   exec "${DOCKER_LAB_HOST_PYTHON:-/usr/bin/python3}" "$HERE/lib/queue_db.py" view --user "$(id -un)" ;;
     stop)    exec "$HERE/stop.sh" ;;
     history) exec "$HERE/history.sh" ;;
     logs)    exec "$HERE/lib/logs.sh" "${2:-job.env}" "${3:-}" ;;

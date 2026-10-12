@@ -4,7 +4,7 @@
 # rodado de novo sem problema (ex. depois de um git pull) — cada passo é idempotente.
 # Desfazer tudo: sudo ./undo.sh
 #
-# Faz 5 coisas:
+# Faz 6 coisas:
 #
 # 1. INSTALAÇÃO COMPARTILHADA: libera state/ e logs/ pra QUALQUER usuário Unix da
 #    máquina (chmod 777) — todos precisam gravar no MESMO state/reservations.json, senão
@@ -40,6 +40,10 @@
 #    criados DEPOIS: um .path do systemd observa /etc/passwd e roda o mesmo script a
 #    cada usuário novo. Atenção: o grupo docker equivale a root na máquina, aceitável
 #    aqui pelo mesmo motivo do item 1 (só contas confiáveis).
+#
+# 6. FILA DE EXECUÇÃO: serviço systemd docker_lab-scheduler (lib/scheduler.py), que
+#    inicia os experimentos da fila (FIFO com backfill) e envia os e-mails; cria
+#    state/queue.db e /etc/docker_lab/email.env (credenciais do Gmail, só root lê).
 set -euo pipefail
 
 if [[ "$(id -u)" -ne 0 ]]; then
@@ -57,8 +61,11 @@ BASHRC_MARKER_END="# <<< docker_lab python guard <<<"
 POWER_SERVICE="/etc/systemd/system/docker_lab-gpu-power-limit.service"
 DOCKER_GROUP_SERVICE="/etc/systemd/system/docker_lab-docker-group.service"
 DOCKER_GROUP_PATH="/etc/systemd/system/docker_lab-docker-group.path"
+SCHEDULER_SERVICE="/etc/systemd/system/docker_lab-scheduler.service"
+HOST_PYTHON="${DOCKER_LAB_HOST_PYTHON:-/usr/bin/python3}"
+EMAIL_CONFIG="/etc/docker_lab/email.env"
 
-echo "== 1/5 Instalação compartilhada: liberando state/ e logs/ pra todos os usuários =="
+echo "== 1/6 Instalação compartilhada: liberando state/ e logs/ pra todos os usuários =="
 mkdir -p "$STATE_DIR" "$LOGS_DIR"
 touch "$STATE_DIR/reservations.lock" "$STATE_DIR/history.lock"
 # 777 SEM sticky bit: reservations.json/history.json são reescritos via arquivo
@@ -71,7 +78,7 @@ chmod 666 "$STATE_DIR/reservations.lock" "$STATE_DIR/history.lock"
 echo "OK"
 
 echo
-echo "== 2/5 Limite de potência da GPU (80%) =="
+echo "== 2/6 Limite de potência da GPU (80%) =="
 chmod +x "$HERE/lib/gpu_power_limit.sh"
 if command -v nvidia-smi >/dev/null 2>&1; then
     cat > "$POWER_SERVICE" <<EOF
@@ -96,7 +103,7 @@ else
 fi
 
 echo
-echo "== 3/5 Comando docker-lab =="
+echo "== 3/6 Comando docker-lab =="
 chmod +x "$HERE/bin/docker-lab"
 if [[ -e /usr/local/bin/docker-lab && ! -L /usr/local/bin/docker-lab ]]; then
     echo "AVISO: /usr/local/bin/docker-lab já existe e não é um symlink — pulando." >&2
@@ -106,7 +113,7 @@ else
 fi
 
 echo
-echo "== 4/5 Bloqueio de Python direto no host =="
+echo "== 4/6 Bloqueio de Python direto no host =="
 GENERATED="$GUARD_DIR/python-blocker.sh"
 sed "s|__REPO_ROOT__|$HERE|g" "$GUARD_DIR/python-blocker.sh.template" > "$GENERATED"
 chmod +x "$GENERATED"
@@ -134,7 +141,7 @@ fi
 echo "Função de shell: $PROFILE_D_FILE (referenciada em /etc/bash.bashrc)"
 
 echo
-echo "== 5/5 Acesso ao Docker para todos os usuários (atuais e futuros) =="
+echo "== 5/6 Acesso ao Docker para todos os usuários (atuais e futuros) =="
 chmod +x "$HERE/lib/sync_docker_group.sh"
 "$HERE/lib/sync_docker_group.sh"
 # Usuários criados DEPOIS: o .path observa /etc/passwd e dispara o .service, que roda o
@@ -162,6 +169,48 @@ systemctl daemon-reload
 systemctl enable --now docker_lab-docker-group.path >/dev/null 2>&1
 echo "Serviço $DOCKER_GROUP_PATH ativo (usuários novos entram no grupo sozinhos)."
 echo "Quem foi adicionado agora precisa reconectar o SSH pra valer."
+
+echo
+echo "== 6/6 Fila de execução (escalonador + e-mails) =="
+# O escalonador (lib/scheduler.py) roda como root: inicia os jobs da fila de TODOS os
+# usuários (cada um como o próprio usuário, via runuser) e lê as credenciais do Gmail,
+# que ficam só aqui, legíveis só pelo root. KillMode=process: reiniciar/parar o serviço
+# não derruba os jobs que ele já iniciou.
+"$HOST_PYTHON" -c "import sys; sys.path.insert(0, '$HERE/lib'); import queue_db; queue_db.connect()"
+touch "$STATE_DIR/queue.wake"
+chmod 666 "$STATE_DIR/queue.db" "$STATE_DIR/queue.wake"
+mkdir -p "$(dirname "$EMAIL_CONFIG")"
+if [[ ! -f "$EMAIL_CONFIG" ]]; then
+    cat > "$EMAIL_CONFIG" <<EOF
+# Credenciais do e-mail que envia os avisos da fila do docker_lab (Gmail, senha de app).
+# Preencha e rode: sudo systemctl restart docker_lab-scheduler
+DOCKERLAB_EMAIL=
+DOCKERLAB_EMAIL_SENHA_APP=
+EOF
+    echo "Criado $EMAIL_CONFIG — preencha DOCKERLAB_EMAIL e DOCKERLAB_EMAIL_SENHA_APP."
+fi
+chown root:root "$EMAIL_CONFIG"
+chmod 600 "$EMAIL_CONFIG"
+cat > "$SCHEDULER_SERVICE" <<EOF
+[Unit]
+Description=docker_lab: escalonador da fila de experimentos
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+ExecStart=$HOST_PYTHON $HERE/lib/scheduler.py
+Restart=always
+RestartSec=5
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable docker_lab-scheduler.service >/dev/null 2>&1
+systemctl restart docker_lab-scheduler.service
+echo "Serviço docker_lab-scheduler ativo (logs: journalctl -u docker_lab-scheduler)."
 
 echo
 echo "== Pronto =="

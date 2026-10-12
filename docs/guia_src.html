@@ -118,13 +118,15 @@ figcaption { font-size: 8.6pt; color: var(--muted); margin-top: 5px; text-align:
 sudo /opt/docker_lab/setup.sh</pre>
 <div class="note warn"><b>Instale em <code>/opt/docker_lab</code>, como root, e não mova a pasta depois.</b> Se a pasta ficar na home de um aluno, os outros usuários não conseguem acessá-la, e esse aluno poderia alterar scripts que rodam como root. Para mudar de lugar: <code>undo.sh</code>, mover a pasta e rodar <code>setup.sh</code> de novo.</div>
 
-<p>O <code>setup.sh</code> faz quatro coisas, e pode ser rodado de novo sem problema (por exemplo, depois de um <code>git pull</code>):</p>
+<p>O <code>setup.sh</code> faz seis coisas, e pode ser rodado de novo sem problema (por exemplo, depois de um <code>git pull</code>):</p>
 <table>
   <tr><th>Passo</th><th>O que faz</th></tr>
   <tr><td>1. Instalação compartilhada</td><td>Libera <code>state/</code> e <code>logs/</code> para todos os usuários, que passam a gravar no mesmo controle de reservas. Usuários criados no futuro já funcionam, sem nenhum comando extra.</td></tr>
   <tr><td>2. Potência da GPU</td><td>Limita cada GPU a 80% do limite de potência atual e instala um serviço do systemd que reaplica o limite a cada boot.</td></tr>
   <tr><td>3. Comando <code>docker-lab</code></td><td>Instala o comando <code>docker-lab</code> para todos os usuários.</td></tr>
   <tr><td>4. Bloqueio de Python direto</td><td>Faz <code>python3 script.py</code> no terminal mostrar um aviso em vez de executar, inclusive com venv ativado. Os binários do sistema não são alterados.</td></tr>
+  <tr><td>5. Acesso ao Docker</td><td>Coloca todos os usuários da máquina no grupo <code>docker</code>, inclusive os criados depois.</td></tr>
+  <tr><td>6. Fila de execução</td><td>Instala o escalonador (serviço <code>docker_lab-scheduler</code>), que inicia os experimentos da fila e envia os e-mails, e cria <code>/etc/docker_lab/email.env</code> para as credenciais.</td></tr>
 </table>
 
 <figure>
@@ -167,6 +169,8 @@ power.limit [W], power.default_limit [W]
 
 <div class="note">Quem estava conectado por SSH durante a instalação só passa a ter o bloqueio completo de Python depois de reconectar. <b>Para desfazer tudo:</b> <code>sudo /opt/docker_lab/undo.sh</code>. Ele remove o bloqueio, volta a GPU à potência de fábrica, remove o comando <code>docker-lab</code> e devolve as permissões originais. Histórico e logs são preservados.</div>
 
+<div class="note"><b>E-mails da fila:</b> o setup cria <code>/etc/docker_lab/email.env</code> (só o root lê). Preencha <code>DOCKERLAB_EMAIL</code> (uma conta Gmail) e <code>DOCKERLAB_EMAIL_SENHA_APP</code> (uma <i>senha de app</i> dessa conta) e rode <code>sudo systemctl restart docker_lab-scheduler</code>. Sem isso, a fila funciona normalmente, só não envia e-mails.</div>
+
 <h2>3. Executando um experimento (cada aluno)</h2>
 
 <h3>Passo 1 — Criar o <code>job.env</code> na raiz do projeto</h3>
@@ -185,7 +189,7 @@ power.limit [W], power.default_limit [W]
 <div class="note">O <code>nvidia-smi</code> mostra cerca de 0,3 GB a mais que o <code>GPU_MEMORY_GB</code> por job: é a memória fixa que o driver reserva para cada processo (contexto CUDA), e o teto de 80% já deixa folga para ela. Não sabe quanta VRAM o seu script usa? Rode uma vez e veja o pico: <code>torch.cuda.max_memory_allocated()</code> no PyTorch, ou <code>nvidia-smi</code> durante a execução.</div>
 
 <h3>Passo 2 — Executar com <code>docker-lab run</code></h3>
-<p>Abra o terminal do VS Code na pasta do projeto e rode <code>docker-lab run</code>. A validação e a reserva aparecem na tela, o job segue em segundo plano e o prompt volta na hora. Você pode fechar o VS Code ou desconectar, e o job continua rodando.</p>
+<p>Abra o terminal do VS Code na pasta do projeto e rode <code>docker-lab run job.env</code>. O experimento entra na <b>fila</b> e inicia sozinho, em segundo plano e com o seu usuário, quando houver recursos. A saída mostra se ele já iniciou ou a posição na fila, e o prompt volta na hora. Você pode fechar o VS Code ou desconectar. O <code>.env</code> precisa ter <code>NOTIFY_EMAIL</code> (avisos por e-mail) e <code>ESTIMATED_RUNTIME_HOURS</code> (tempo estimado, em horas).</p>
 
 <figure>
 <div class="vsc">
@@ -203,25 +207,28 @@ power.limit [W], power.default_limit [W]
     </div>
     <div class="main">
       <div class="tabs"><div class="tab on">⚙ job.env</div><div class="tab">◆ treino.py</div></div>
-      <div class="ed"><div class="ln">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8</div><div class="code"><span class="cm"># Job do meu experimento — ver /opt/docker_lab/job.env.example</span>
+      <div class="ed"><div class="ln">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10</div><div class="code"><span class="cm"># Job do meu experimento — ver /opt/docker_lab/job.env.example</span>
 <span class="k">SCRIPT</span>=<span class="v">treino.py</span>
 <span class="k">PYTHON_BIN</span>=<span class="v">venv/bin/python</span>
 <span class="k">CORES</span>=<span class="n">2</span>
 <span class="k">MEMORY_GB</span>=<span class="n">4</span>
 <span class="k">GPU</span>=<span class="n">0</span>
 <span class="k">GPU_MEMORY_GB</span>=<span class="n">2</span>
-<span class="k">JOB_NAME</span>=<span class="v">{USERNAME}_treino</span></div></div>
+<span class="k">JOB_NAME</span>=<span class="v">{USERNAME}_treino</span>
+<span class="k">NOTIFY_EMAIL</span>=<span class="v">aluno@gmail.com</span>
+<span class="k">ESTIMATED_RUNTIME_HOURS</span>=<span class="n">1.5</span></div></div>
       <div class="panel">
         <div class="ptabs"><span>PROBLEMS</span><span>OUTPUT</span><span class="on">TERMINAL</span></div>
 <pre class="term"><span class="pu">aluno@ainetmachine</span>:<span class="pp">~/meu_projeto</span>$ docker-lab run job.env
 == Buildando imagem (docker-lab-runner:latest) ==
-== Reservando recurso para 'aluno_treino' (cores=2 mem=4GB gpu=0 vram=2GB) ==
-== Reservado: cores do host = 0,1 ==
-== Rodando em segundo plano: /home/aluno/meu_projeto/venv/bin/python treino.py ==
-   Container: docker-lab-aluno_treino
-   Log:       /opt/docker_lab/logs/aluno_treino_20260928_103005.log
-   Ver o log: docker-lab logs job.env
-   Pra parar: docker-lab stop
+== Enfileirando 'aluno_treino' (cores=2 mem=4GB gpu=0 vram=2GB) ==
+== Experimento #14 (aluno_treino) entrou na fila ==
+   Situação:    INICIOU IMEDIATAMENTE (havia recursos livres)
+   Log:         /opt/docker_lab/logs/aluno_treino_20260928_103005.log
+   Estimativa:  informada 1h30m, corrigida 2h00m (sua margem atual: +30m)
+   E-mails:     você receberá avisos em aluno@gmail.com (próximo da fila, início, fim)
+   Ver o log:   docker-lab logs aluno_treino
+Use "docker-lab queue" para acompanhar a fila
 <span class="pu">aluno@ainetmachine</span>:<span class="pp">~/meu_projeto</span>$ </pre>
       </div>
     </div>
@@ -361,8 +368,8 @@ Projeto no GitHub: https://github.com/lucas-mendonca-andrade/docker_lab
 </figure>
 <div class="note warn">O bloqueio é uma <b>barreira contra esquecimento</b>, não uma trava de segurança. Caminhos absolutos (<code>/usr/bin/python3.11 x.py</code>), <code>./script.py</code> e scripts <code>.sh</code> não interativos passam sem aviso. Use sempre o <code>docker-lab run</code>.</div>
 
-<h3>Passar do teto da máquina</h3>
-<p>Se o pedido de um job, somado ao que já está reservado, passar do teto de qualquer recurso, a execução é recusada na hora, com a explicação do motivo. Nada entra em fila: espere algum job terminar, ou peça menos recurso.</p>
+<h3>Passar do teto da máquina: fila</h3>
+<p>Se o pedido de um job, somado ao que já está reservado, passar do teto de qualquer recurso, ele <b>espera na fila</b> e inicia sozinho quando houver recursos. A ordem é de chegada, mas um job curto que cabe agora pode passar na frente, se a estimativa corrigida dele terminar antes de liberarem os recursos do primeiro da fila. Acompanhe com <code>docker-lab queue</code>. Só é recusado na hora o pedido que <b>nunca</b> caberia na máquina, por exemplo mais cores que o teto total.</p>
 <figure>
 <div class="vsc">
   <div class="title"><span class="dots"><span style="background:#ff5f57"></span><span style="background:#febc2e"></span><span style="background:#28c840"></span></span><span class="t">meu_projeto [SSH: ainetmachine] — Visual Studio Code</span></div>
@@ -373,16 +380,20 @@ Projeto no GitHub: https://github.com/lucas-mendonca-andrade/docker_lab
         <div class="ptabs"><span>PROBLEMS</span><span>OUTPUT</span><span class="on">TERMINAL</span></div>
 <pre class="term"><span class="pu">aluno@ainetmachine</span>:<span class="pp">~/meu_projeto</span>$ docker-lab run job_grande.env
 == Buildando imagem (docker-lab-runner:latest) ==
-== Reservando recurso para 'aluno_treino_grande' (cores=2 mem=8GB gpu=0 vram=4GB) ==
-<span class="r">Pedido de 4GB de VRAM na GPU 0 ultrapassaria o teto de 80%: já 8GB em uso, limite é 9GB de 12GB totais.</span>
-<span class="r">== Não foi possível reservar recurso — veja a mensagem acima. Rode docker-lab status para ver o que está em uso. ==</span>
+== Enfileirando 'aluno_treino_grande' (cores=2 mem=8GB gpu=0 vram=4GB) ==
+== Experimento #15 (aluno_treino_grande) entrou na fila ==
+   <span class="y">Situação:    aguardando na fila — posição 1 de 1</span>
+   Estimativa:  informada 3h00m, corrigida 3h30m (sua margem atual: +30m)
+   E-mails:     você receberá avisos em aluno@gmail.com (próximo da fila, início, fim)
+   Ver o log:   docker-lab logs aluno_treino_grande
+Use "docker-lab queue" para acompanhar a fila
 <span class="pu">aluno@ainetmachine</span>:<span class="pp">~/meu_projeto</span>$ </pre>
       </div>
     </div>
   </div>
   <div class="status"><span class="remote">&gt;&lt; SSH: ainetmachine</span><span>bash</span></div>
 </div>
-<figcaption>Figura 6 — Pedido de VRAM recusado: a GPU já tem 8 GB reservados, e o teto é 9 GB.</figcaption>
+<figcaption>Figura 6 — Pedido de VRAM acima do que está livre agora (a GPU já tem 8 GB reservados, e o teto é 9 GB): o job espera na fila e inicia sozinho quando houver VRAM.</figcaption>
 </figure>
 
 <h3>Passar do limite do próprio job</h3>
@@ -400,15 +411,17 @@ Projeto no GitHub: https://github.com/lucas-mendonca-andrade/docker_lab
 <pre class="cmd" style="margin:4px 0 0">sudo git clone https://github.com/lucas-mendonca-andrade/docker_lab.git /opt/docker_lab
 sudo /opt/docker_lab/setup.sh
 <span class="c"># desfazer tudo:</span>
-sudo /opt/docker_lab/undo.sh</pre></div>
+sudo /opt/docker_lab/undo.sh
+sudo nano /etc/docker_lab/email.env</pre></div>
   <div class="card"><b>Aluno (na raiz do projeto)</b>
 <pre class="cmd" style="margin:4px 0 0">cp /opt/docker_lab/job.env.example job.env
 docker-lab run job.env
+docker-lab queue
 docker-lab status
-docker-lab logs job.env         <span class="c"># fim do log + lista de execuções</span>
+docker-lab logs job.env
 docker-lab stop
 docker-lab history
-docker-lab corrigir-permissoes  <span class="c"># arquivos antigos com dono root</span></pre></div>
+docker-lab corrigir-permissoes</pre></div>
 </div>
 <p style="margin-top:14px;font-size:9pt;color:var(--muted)">Código-fonte, README e atualizações: <a href="https://github.com/lucas-mendonca-andrade/docker_lab">https://github.com/lucas-mendonca-andrade/docker_lab</a></p>
 
