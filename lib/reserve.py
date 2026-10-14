@@ -361,6 +361,9 @@ def history_start(history_path, name, user, script, log=None, memory_gb=None,
                   gpu_memory_gb=None):
     """Registra o inicio de uma execucao no historico e devolve o run_id dela."""
     history = read_history(history_path)
+    for old in history["runs"]:
+        if old["job_name"] == name and old["status"] == "executando":
+            old["status"] = "interrompido"
     run_id = f"{name}@{_now_iso()}"
     history["runs"].append({
         "run_id": run_id,
@@ -414,14 +417,26 @@ def cmd_history_finish(args):
     write_history(args.history, history)
 
 
-def display_status(run, now):
+def latest_run_ids(runs):
+    """{job_name: run_id da execucao mais recente} — so ela pode estar rodando de verdade."""
+    latest = {}
+    for run in sorted(runs, key=lambda r: r["started_at"]):
+        latest[run["job_name"]] = run["run_id"]
+    return latest
+
+
+def display_status(run, now, latest=None):
     """Status pra exibicao. Execucoes que ficaram "executando" mas cujo container ja nao
     existe mais (crash, maquina reiniciada, etc. — nunca passaram pelo history-finish)
     aparecem como "interrompido", sem alterar o arquivo. Mesma folga de
     GRACE_PERIOD_SECONDS do reap() — senao uma consulta bem na hora do inicio (container
     ainda nao apareceu no `docker ps`) mostraria "interrompido" num job que acabou de
-    comecar."""
+    comecar. O container e identificado pelo NOME do job, entao so a execucao mais
+    recente de cada nome (`latest`) pode contar como rodando — as anteriores que ficaram
+    presas em "executando" sao interrompidas, mesmo com um container novo de mesmo nome."""
     status = run["status"]
+    if status == "executando" and latest is not None and latest.get(run["job_name"]) != run["run_id"]:
+        return "interrompido"
     if status == "executando":
         started_ts = datetime.datetime.fromisoformat(run["started_at"]).timestamp()
         if now - started_ts > GRACE_PERIOD_SECONDS and not container_is_running(run["job_name"]):
@@ -447,12 +462,13 @@ def cmd_history_list(args):
         print("Nenhuma execução registrada ainda.")
         return
     now = time.time()
+    latest = latest_run_ids(runs)
     header = (f"{'JOB_NAME':40s} {'USUARIO':16s} {'INICIO':20s} {'FIM':20s} "
               f"{'STATUS':12s} {'SUGESTAO'}")
     print(header)
     print("-" * (len(header) + 24))
     for run in sorted(runs, key=lambda r: r["started_at"]):
-        status = display_status(run, now)
+        status = display_status(run, now, latest)
         ended = run["ended_at"] or "-"
         print(f"{run['job_name']:40s} {run['user']:16s} {run['started_at']:20s} "
               f"{ended:20s} {status:12s} {status_hint(run, status)}".rstrip())
@@ -472,11 +488,12 @@ def cmd_history_runs(args):
         if not run.get("log"):
             legacy_owner = run["run_id"]
     now = time.time()
+    latest = latest_run_ids(runs)
     for run in runs:
         log = run.get("log") or ""
         if not log and run["run_id"] == legacy_owner and os.path.isfile(legacy):
             log = legacy
-        status = display_status(run, now)
+        status = display_status(run, now, latest)
         print("\t".join([status, run["started_at"], run["ended_at"] or "-", log or "-",
                          status_hint(run, status)]))
 
