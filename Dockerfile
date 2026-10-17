@@ -42,6 +42,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 # MLNet falhava silenciosamente ('wget: not found', sem set -e no script pra travar na
 # hora) deixando 'dotnet'/'mlnet' pela metade — o job "terminava com sucesso" (a AMLB
 # nao propaga esse erro como exit code != 0) mas sem instalar nada de verdade.
+# python3.X-dev: cabecalhos do Python (Python.h). Bibliotecas que compilam codigo C na
+# hora de rodar precisam deles — achado num erro real (2026-10-15): o Triton (usado pelo
+# PyTorch na GPU) compila um modulo auxiliar no 1o uso e falhava com 'fatal error:
+# Python.h: No such file or directory'.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         software-properties-common \
         gnupg \
@@ -52,14 +56,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgomp1 \
     && add-apt-repository -y ppa:deadsnakes/ppa \
     && apt-get update && apt-get install -y --no-install-recommends \
-        python3.7  python3.7-venv \
-        python3.8  python3.8-venv \
-        python3.9  python3.9-venv \
-        python3.10 python3.10-venv \
-        python3.11 python3.11-venv \
-        python3.12 python3.12-venv \
-        python3.13 python3.13-venv \
-        python3.14 python3.14-venv \
+        python3.7  python3.7-venv  python3.7-dev \
+        python3.8  python3.8-venv  python3.8-dev \
+        python3.9  python3.9-venv  python3.9-dev \
+        python3.10 python3.10-venv python3.10-dev \
+        python3.11 python3.11-venv python3.11-dev \
+        python3.12 python3.12-venv python3.12-dev \
+        python3.13 python3.13-venv python3.13-dev \
+        python3.14 python3.14-venv python3.14-dev \
     && rm -rf /var/lib/apt/lists/*
 # Versoes cobertas: 3.7-3.14 (todas as estaveis que o deadsnakes oferece pro 24.04;
 # 3.6 e anteriores nao existem mais la). Se algum aluno precisar de outra, adicione aqui
