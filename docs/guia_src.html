@@ -173,13 +173,16 @@ power.limit [W], power.default_limit [W]
 
 <h2>3. Executando um experimento (cada aluno)</h2>
 
-<h3>Passo 1 — Criar o <code>job.env</code> na raiz do projeto</h3>
-<pre class="cmd">cp /opt/docker_lab/job.env.example ~/meu_projeto/job.env</pre>
+<h3>Passo 1 — Criar o venv e o <code>job.env</code> na raiz do projeto</h3>
+<pre class="cmd">cd ~/meu_projeto
+docker-lab venv 3.11 requirements.txt
+cp /opt/docker_lab/job.env.example job.env</pre>
+<p><code>docker-lab venv</code> cria a pasta <code>venv/</code> com o Python escolhido (3.7 a 3.14; sem argumentos, mostra um menu) e instala os pacotes do <code>requirements.txt</code>. O venv é criado dentro do container e só funciona pelo <code>docker-lab run</code>. Outra versão do Python só pode ser adicionada pelo administrador.</p>
 <p>O <code>job.env</code> fica <b>sempre na raiz do projeto</b>. A pasta onde ele está é montada dentro do container, e os caminhos <code>SCRIPT</code> e <code>PYTHON_BIN</code> são relativos a ela.</p>
 <table>
   <tr><th>Variável</th><th>Exemplo</th><th>Significado</th></tr>
   <tr><td><code>SCRIPT</code></td><td><code>treino.py</code></td><td>Script a executar, relativo à raiz do projeto</td></tr>
-  <tr><td><code>PYTHON_BIN</code></td><td><code>venv/bin/python</code></td><td>Python usado. Normalmente é o venv do próprio projeto; são aceitos venvs de Python 3.9 a 3.12.</td></tr>
+  <tr><td><code>PYTHON_BIN</code></td><td><code>venv/bin/python</code></td><td>Python usado. Normalmente é o venv do projeto, criado com <code>docker-lab venv</code> (Python 3.7 a 3.14).</td></tr>
   <tr><td><code>CORES</code></td><td><code>2</code></td><td>Quantidade de cores. O docker_lab escolhe quais cores livres usar.</td></tr>
   <tr><td><code>MEMORY_GB</code></td><td><code>4</code></td><td>RAM máxima do job</td></tr>
   <tr><td><code>GPU</code></td><td><code>none</code> ou <code>0</code></td><td>Não usar GPU (<code>none</code>) ou usar a GPU de índice 0, a primeira coluna do <code>nvidia-smi</code></td></tr>

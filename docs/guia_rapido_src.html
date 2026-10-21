@@ -44,9 +44,8 @@ pre { font-family: "DejaVu Sans Mono", monospace; font-size: 8pt; background: #0
 scikit-learn</pre>
 <div class="file">criar o venv (uma vez)</div>
 <pre>cd ~/meu_projeto
-/usr/bin/python3 -m venv venv
-venv/bin/pip install -r requirements.txt</pre>
-<p style="font-size:8.6pt;color:var(--muted)">Use o caminho completo <code>/usr/bin/python3</code>: o <code>python3</code> puro está bloqueado no terminal.</p>
+docker-lab venv 3.11 requirements.txt</pre>
+<p style="font-size:8.6pt;color:var(--muted)">Cria <code>venv/</code> com o Python escolhido (3.7 a 3.14) e instala os pacotes. Sem argumentos, <code>docker-lab venv</code> mostra um menu de versões. O venv só funciona pelo <code>docker-lab run</code>.</p>
 </div>
 </div>
 

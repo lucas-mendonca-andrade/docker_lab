@@ -128,7 +128,7 @@ fi
 PYTHON_MOUNT_ARGS=()
 EXTERNAL_PREFIXES=()
 if [[ "$CONTAINER_PYTHON_BIN" == /* ]]; then
-    if [[ ! -e "$CONTAINER_PYTHON_BIN" ]]; then
+    if [[ ! -e "$CONTAINER_PYTHON_BIN" && ! -L "$CONTAINER_PYTHON_BIN" ]]; then
         echo "PYTHON_BIN não encontrado: $CONTAINER_PYTHON_BIN — edite PYTHON_BIN no job.env." >&2
         exit 1
     fi
@@ -147,8 +147,15 @@ if [[ "$CONTAINER_PYTHON_BIN" == /* ]]; then
         [[ -L "$link" ]] || break
         target="$(readlink "$link")"
         [[ "$target" == /* ]] || target="$(dirname "$link")/$target"
-        link="$(cd "$(dirname "$target")" && pwd)/$(basename "$target")"
+        dir="$(cd "$(dirname "$target")" 2>/dev/null && pwd)" || dir="$(dirname "$target")"
+        link="$dir/$(basename "$target")"
     done
+    # Link quebrado no host so e aceito se terminar num Python da imagem (venv criado
+    # com 'docker-lab venv' aponta pro /usr/bin/python3.X dela, que o host pode nao ter).
+    if [[ ! -e "$CONTAINER_PYTHON_BIN" && ! "$link" =~ ^/usr/bin/python3\.[0-9]+$ ]]; then
+        echo "PYTHON_BIN aponta para um Python que não existe: $link — recrie o venv (docker-lab venv)." >&2
+        exit 1
+    fi
 fi
 
 # Versao do /usr/bin/python3 do host (ex. 3.8 no Ubuntu 20.04) — a imagem aponta o

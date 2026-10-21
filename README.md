@@ -51,9 +51,18 @@ só não envia e-mails. Logs do escalonador: `journalctl -u docker_lab-scheduler
 
 ### 2. Preparar um novo script (cada usuário)
 
+Crie o venv do projeto com o Python do docker_lab (versões 3.7 a 3.14) e copie o `job.env`:
+
 ```bash
-cp /opt/docker_lab/job.env.example ~/meu_projeto/job.env
+cd ~/meu_projeto
+docker-lab venv 3.11 requirements.txt    # cria ./venv com Python 3.11 e instala os pacotes
+docker-lab venv                          # ou: menu para escolher a versão
+cp /opt/docker_lab/job.env.example job.env
 ```
+
+O venv é criado dentro do container, então funciona só pelo `docker-lab run` (no
+terminal ele aparece quebrado, e isso é esperado). Só existem as versões da imagem: para
+outra versão, peça ao administrador.
 
 Edite o `job.env` (ele fica **sempre na raiz do seu projeto**):
 
