@@ -177,7 +177,7 @@ power.limit [W], power.default_limit [W]
 <pre class="cmd">cd ~/meu_projeto
 docker-lab venv 3.11 requirements.txt
 cp /opt/docker_lab/job.env.example job.env</pre>
-<p><code>docker-lab venv</code> cria a pasta <code>venv/</code> com o Python escolhido (3.7 a 3.14; sem argumentos, mostra um menu) e instala os pacotes do <code>requirements.txt</code>. O venv é criado dentro do container e só funciona pelo <code>docker-lab run</code>. Outra versão do Python só pode ser adicionada pelo administrador.</p>
+<p><code>docker-lab venv</code> cria a pasta <code>venv/</code> com o Python escolhido (3.7 a 3.14; sem argumentos, mostra um menu) e instala os pacotes do <code>requirements.txt</code>. Para instalar pacotes depois, num venv que já existe, use <code>docker-lab pip install -r requirements.txt</code> (ou <code>docker-lab pip install pandas</code>, <code>docker-lab pip list</code>). O venv é criado dentro do container, então <code>venv/bin/pip</code> no terminal não funciona: use sempre <code>docker-lab pip</code> e <code>docker-lab run</code>. Outra versão do Python só pode ser adicionada pelo administrador.</p>
 <p>O <code>job.env</code> fica <b>sempre na raiz do projeto</b>. A pasta onde ele está é montada dentro do container, e os caminhos <code>SCRIPT</code> e <code>PYTHON_BIN</code> são relativos a ela.</p>
 <table>
   <tr><th>Variável</th><th>Exemplo</th><th>Significado</th></tr>

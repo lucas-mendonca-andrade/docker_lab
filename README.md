@@ -60,6 +60,13 @@ docker-lab venv                          # ou: menu para escolher a versão
 cp /opt/docker_lab/job.env.example job.env
 ```
 
+Para instalar pacotes depois, num venv que já existe (o `pip` direto no terminal não funciona nele):
+
+```bash
+docker-lab pip install -r requirements.txt   # ou: docker-lab pip install pandas
+docker-lab pip list                          # outro venv: docker-lab pip --venv venv2 ...
+```
+
 O venv é criado dentro do container, então funciona só pelo `docker-lab run` (no
 terminal ele aparece quebrado, e isso é esperado). Só existem as versões da imagem: para
 outra versão, peça ao administrador.

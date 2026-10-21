@@ -22,6 +22,9 @@ Uso:
                              cria o venv do projeto com o Python da imagem
                              (3.7 a 3.14; sem versão, mostra um menu),
                              ex.: docker-lab venv 3.11 requirements.txt
+  docker-lab pip [--venv pasta] <comando do pip>
+                             instala pacotes depois no venv (padrão: ./venv),
+                             ex.: docker-lab pip install -r requirements.txt
   docker-lab corrigir-permissoes [pasta]
                              devolve pra você arquivos com dono root na sua pasta
                              (sobra de jobs antigos; padrão: pasta atual)
@@ -36,6 +39,7 @@ case "${1:-}" in
     history) exec "$HERE/history.sh" ;;
     logs)    exec "$HERE/lib/logs.sh" "${2:-job.env}" "${3:-}" ;;
     venv)    shift; exec "$HERE/lib/venv.sh" "$@" ;;
+    pip)     shift; exec "$HERE/lib/pip.sh" "$@" ;;
     corrigir-permissoes) exec "$HERE/lib/corrigir_permissoes.sh" "${2:-.}" ;;
     *)       uso; exit 1 ;;
 esac
