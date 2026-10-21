@@ -96,6 +96,13 @@ RUN mkdir -p /tmp/vgpulock && chmod 1777 /tmp/vgpulock
 # — ver comentario no run.sh sobre por que isso e necessario (venvs de framework com
 # link simbolico absoluto pro venv raiz do repo, que so resolve se o caminho bater).
 
+# git: 'pip install git+https://...' (requirements com pacotes direto do GitHub), usado
+# pelo 'docker-lab venv' (lib/venv.sh). Camada SEPARADA de proposito: incluir na camada
+# dos Pythons invalidaria o cache dela e forcaria baixar de novo todos eles do PPA
+# deadsnakes (Launchpad, que as vezes fica lento/fora do ar).
+RUN apt-get update && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
 # Dependencias extras que o SEU script precise (fora do que ja vem no venv do repo,
 # se voce for usar um). Vazio por padrao — cada aluno mantem o proprio requirements.txt.
 COPY requirements.txt /tmp/requirements.txt
